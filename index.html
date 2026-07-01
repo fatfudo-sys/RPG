@@ -28,6 +28,8 @@
   #cashChip b{color:var(--gold);}
   #repChip b{color:var(--pink);}
   #salChip b{color:var(--grn);}
+  #floorChip b{color:var(--blue);}
+  #soundChip,#achChip{cursor:pointer;}
   .bar{position:relative; width:120px; height:9px; border-radius:6px; background:#0c1016; overflow:hidden; border:1px solid var(--line);}
   .bar > i{position:absolute; left:0; top:0; bottom:0; border-radius:6px; transition:width .25s ease;}
   #expBar > i{background:linear-gradient(90deg,#5aa9ff,#b085ff);}
@@ -36,7 +38,8 @@
   /* ===== Main ===== */
   #main{flex:1; display:flex; gap:10px; padding:10px; min-height:0;}
   #stageWrap{flex:1; position:relative; border:1px solid var(--line); border-radius:14px; overflow:hidden;
-             background:#0a0e14; min-height:0; box-shadow:inset 0 0 60px rgba(0,0,0,.5);}
+             background:#0a0e14; min-height:0; box-shadow:inset 0 0 60px rgba(0,0,0,.5);
+             transition:opacity .28s ease;}
   #stage{width:100%; height:100%; display:block; cursor:pointer; touch-action:none;}
   #hint{position:absolute; left:10px; bottom:10px; font-size:12px; color:var(--dim);
         background:rgba(13,17,23,.7); padding:5px 9px; border-radius:8px; pointer-events:none;}
@@ -80,7 +83,8 @@
   #overlay{position:fixed; inset:0; background:rgba(6,9,14,.72); display:none;
            align-items:center; justify-content:center; z-index:50; padding:16px;}
   .modal{background:linear-gradient(180deg,#1a2130,#141922); border:1px solid #33405a;
-         border-radius:18px; padding:20px; max-width:430px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.6);}
+         border-radius:18px; padding:20px; max-width:440px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.6);
+         max-height:86dvh; overflow-y:auto;}
   .modal .who{display:flex; align-items:center; gap:12px; margin-bottom:12px;}
   .modal .face{font-size:44px; filter:drop-shadow(0 3px 4px rgba(0,0,0,.4));}
   .modal .who .nm{font-size:19px; font-weight:800;}
@@ -92,13 +96,23 @@
   .offer .row span:last-child{font-weight:700;}
   .modalBtns{display:flex; gap:10px;}
   .modalBtns .btn{margin-top:0;}
+  .modal h2{margin:0 0 12px; font-size:20px;}
+  .achlist{display:flex; flex-direction:column; gap:8px;}
+  .achrow{display:flex; align-items:center; gap:11px; background:#0e131c; border:1px solid var(--line);
+          border-radius:12px; padding:9px 12px;}
+  .achrow .ae{font-size:26px; width:32px; text-align:center;}
+  .achrow .an{font-size:14px; font-weight:700;}
+  .achrow .ad{font-size:11px; color:var(--dim);}
+  .achrow.locked{opacity:.42; filter:grayscale(.8);}
+  .achrow.locked .ae{}
+  .achrow .tick{margin-left:auto; font-size:18px;}
 
   /* ===== Level up toast ===== */
   #toast{position:fixed; top:0; left:0; right:0; display:flex; justify-content:center; z-index:60; pointer-events:none;}
   #toast .t{margin-top:70px; background:linear-gradient(90deg,#b085ff,#5aa9ff); color:#0d1117;
             font-weight:900; font-size:18px; padding:12px 26px; border-radius:40px;
             box-shadow:0 10px 40px rgba(90,169,255,.4); opacity:0; transform:translateY(-20px) scale(.9);
-            transition:all .35s cubic-bezier(.2,1.4,.4,1);}
+            transition:all .35s cubic-bezier(.2,1.4,.4,1); text-align:center;}
   #toast.show .t{opacity:1; transform:translateY(0) scale(1);}
 
   /* ===== Start screen ===== */
@@ -109,7 +123,7 @@
   #start .sub{color:var(--dim); font-size:14px; margin-bottom:18px;}
   #start .em{font-size:64px; margin-bottom:8px; animation:bob 1.6s ease-in-out infinite;}
   #start .guide{font-size:13px; color:var(--ink); background:var(--panel); border:1px solid var(--line);
-                border-radius:14px; padding:14px 18px; max-width:400px; line-height:1.85; margin-bottom:20px; text-align:left;}
+                border-radius:14px; padding:14px 18px; max-width:420px; line-height:1.85; margin-bottom:20px; text-align:left;}
   #start .go{font-size:18px; font-weight:900; padding:14px 40px; border:none; border-radius:40px; cursor:pointer;
              color:#0d1117; background:linear-gradient(90deg,#ffce54,#ff9f43); box-shadow:0 8px 30px rgba(255,206,84,.35);}
   #start .go:active{transform:scale(.96);}
@@ -134,13 +148,16 @@
     <div class="chip" id="repChip"><span>🏆</span><span><span class="lbl">聲望</span> <b id="repTxt">0</b></span></div>
     <div class="chip" id="salChip"><span>💵</span><span><span class="lbl">月薪</span> <b id="salTxt">30,000</b></span></div>
     <div class="chip" id="cashChip"><span>💰</span><span><span class="lbl">現金</span> <b id="cashTxt">0</b></span></div>
+    <div class="chip" id="floorChip"><span>🏢</span><b id="floorTxt">設計中心 1F</b></div>
+    <div class="chip" id="achChip"><span>🏅</span><b id="achTxt">0/12</b></div>
+    <div class="chip" id="soundChip"><span id="soundIco">🔊</span></div>
   </div>
 
   <div id="main">
     <div id="stageWrap">
       <div id="zoneTag">你的座位</div>
       <svg id="stage" preserveAspectRatio="xMidYMid slice"></svg>
-      <div id="hint">🖱️ 點地圖走動 · 點 NPC💬 接任務 · 方向鍵/WASD 也可</div>
+      <div id="hint">🖱️ 點地圖走動 · 點 NPC💬 接任務 · 🛗 電梯換樓層 · WASD 也可</div>
     </div>
 
     <div id="side">
@@ -176,97 +193,21 @@
     🚶 在設計中心自由走動，探索地圖、認識同事。<br>
     💬 找 NPC 接下 <b>設計任務與需求</b>，完成它！<br>
     📈 完成任務 → 技能、聲望、等級成長。<br>
-    💼 職級、能力、月薪 <b>無限升級</b>，一路爽爬到設計之神！<br>
-    ☕ 精力用完了？去茶水間喝杯咖啡回血。
+    🛗 搭電梯上 <b>研發展示大樓 2F</b>，接更高階的專案。<br>
+    🏅 解鎖成就、💼 職級與月薪 <b>無限升級</b>，爽爬到設計之神！<br>
+    ☕ 精力用完？去茶水間 / 頂樓花園回血。
   </div>
   <button class="go" id="goBtn">開始上班 ▶</button>
 </div>
 
 <script>
 /* ========================================================================
-   設計中心生存記  —  single-file HTML5 game
+   設計中心生存記  —  single-file HTML5 game  (v2: 音效 + 成就 + 二樓)
    ===================================================================== */
-const T = 46;                 // tile size in svg units
+const T = 46;
 const COLS = 26, ROWS = 18;
 const SVGNS = "http://www.w3.org/2000/svg";
 const $ = id => document.getElementById(id);
-
-/* ---------- world layout (walls & furniture placed by coordinates) ---------- */
-// obstacle map: true = blocked
-const blocked = Array.from({length:ROWS}, ()=>Array(COLS).fill(false));
-// border walls
-for(let x=0;x<COLS;x++){blocked[0][x]=blocked[ROWS-1][x]=true;}
-for(let y=0;y<ROWS;y++){blocked[y][0]=blocked[y][COLS-1]=true;}
-
-// decorative / obstacle furniture: {x,y,em,size?}
-const decor = [];
-function addDecor(x,y,em,size){ decor.push({x,y,em,size:size||30}); blocked[y][x]=true; }
-
-// a couple of interior wall segments (glass partitions) — visual + block
-const walls = [];
-function addWall(x,y){ walls.push({x,y}); blocked[y][x]=true; }
-
-// zones: labelled areas {x,y (center tile), name, w,h in tiles}
-const zones = [
-  {x:3,  y:14, name:"你的座位"},
-  {x:8,  y:13, name:"設計師工作區"},
-  {x:14, y:13, name:"UX 研究室"},
-  {x:21, y:13, name:"模型工作坊"},
-  {x:6,  y:4,  name:"會議室"},
-  {x:14, y:4,  name:"提案簡報區"},
-  {x:21, y:4,  name:"總監辦公室"},
-  {x:12, y:9,  name:"茶水間"},
-  {x:3,  y:8,  name:"大廳接待"},
-];
-
-// pantry tiles (stepping adjacent restores energy)
-const pantry = {x:12,y:9};
-
-/* --- populate furniture clusters --- */
-// your desk (start)
-addDecor(2,14,"🖥️"); addDecor(3,15,"🖥️"); addDecor(2,16,"🪑",26); addDecor(4,16,"🪴",26);
-// designer work area
-addDecor(7,12,"🖥️"); addDecor(9,12,"🖥️"); addDecor(7,14,"🖥️"); addDecor(9,14,"🖥️"); addDecor(10,15,"🪴",26);
-// UX research
-addDecor(13,12,"🖥️"); addDecor(15,12,"🖥️"); addDecor(14,14,"🧩",28); addDecor(16,14,"🪴",26);
-// model workshop
-addDecor(20,12,"🛠️"); addDecor(22,12,"🖨️"); addDecor(20,14,"🪚",28); addDecor(22,14,"📦",28); addDecor(23,15,"🪴",26);
-// meeting room
-addDecor(5,3,"🪑",26); addDecor(7,3,"🪑",26); addDecor(6,3,"🍩",26); addDecor(5,5,"🪑",26); addDecor(7,5,"🪑",26);
-// presentation area
-addDecor(13,3,"📽️"); addDecor(15,3,"📊",28); addDecor(14,5,"🖼️",28);
-// director office
-addDecor(20,3,"🖥️"); addDecor(22,3,"🏆",28); addDecor(21,5,"🪴",26); addDecor(23,3,"🛋️",28);
-// pantry
-addDecor(11,9,"☕"); addDecor(13,9,"🧃",26); addDecor(12,10,"🍪",26);
-// reception
-addDecor(2,7,"🛎️",26); addDecor(2,9,"🪴",26); addDecor(4,9,"🖥️");
-// scattered plants
-addDecor(17,8,"🪴",26); addDecor(9,8,"🪴",26); addDecor(18,16,"🪴",26);
-// glass partition segments between rooms (top area)
-for(let x=3;x<=9;x++) if(x!==6) addWall(x,1);      // meeting room front-ish (leave a gap)
-for(let y=2;y<=5;y++) addWall(9,y);                // right side of meeting room
-for(let y=2;y<=5;y++) addWall(18,y);               // left side of director office
-addWall(10,1);addWall(11,1);addWall(12,1);
-
-/* ---------- NPCs ---------- */
-// specialty maps to a skill key; each can hand out infinite quests
-const NPCS = [
-  {id:"zhe",  x:8,  y:11, face:"🧑‍🎨", name:"阿哲學長", role:"資深工業設計師", spec:"sketch",
-    hi:["新來的？剛好有個造型的活兒，想不想練練手？","菜鳥！這個 sketch 交給你了。","來得正好，這個設計提案缺人。"]},
-  {id:"ting", x:14, y:11, face:"👩‍💻", name:"小婷", role:"UX 設計師", spec:"ux",
-    hi:["我在做使用者研究，你來幫我看看流程？","有個 UX 痛點要解，交給你囉。","來，這個互動體驗你來設計。"]},
-  {id:"wang", x:21, y:11, face:"🧑‍🔧", name:"老王師傅", role:"模型工程師", spec:"material",
-    hi:["模型間永遠缺人！這個打樣你來。","材料選對了，產品就成功一半。試試看。","來動手做，這個結構交給你。"]},
-  {id:"kevin",x:6,  y:6,  face:"🧑‍💼", name:"Kevin", role:"產品經理 PM", spec:"ux",
-    hi:["客戶又改需求了…你能接嗎？","市場等著這個 spec，拜託你了。","開會結論：這個功能你負責。"]},
-  {id:"amy",  x:14, y:6, face:"🧑‍🏫",  name:"Amy", role:"簡報設計顧問", spec:"present",
-    hi:["提案要打動人，靠的是簡報。你來做一份。","把你的設計說成故事，來練練。","下週要對客戶提案，這份給你。"]},
-  {id:"boss", x:21, y:6, face:"👔",    name:"陳總監", role:"設計中心總監", spec:"present",
-    hi:["年輕人，敢不敢接下這個旗艦專案？","做得好，我給你升職。這個交給你。","公司押寶這個產品，別讓我失望。"]},
-  {id:"lab",  x:16, y:11, face:"👩‍🔬", name:"Dr. Lin", role:"材料研究員", spec:"material",
-    hi:["新的環保材料剛到，來試做一個？","永續設計是未來，這個你來。","實驗室有個有趣的專案。"]},
-];
 
 /* ---------- skills ---------- */
 const SKILLS = {
@@ -279,7 +220,7 @@ const SKILLS = {
 };
 const SKILL_KEYS = Object.keys(SKILLS);
 
-/* ---------- products for quest flavour ---------- */
+/* ---------- quest flavour ---------- */
 const PRODUCTS = [
   ["滑鼠","🖱️"],["機械鍵盤","⌨️"],["筆記型電腦","💻"],["智慧手機","📱"],["降噪耳機","🎧"],
   ["人體工學椅","🪑"],["檯燈","💡"],["保溫瓶","🍶"],["登山背包","🎒"],["智慧手錶","⌚"],
@@ -291,17 +232,153 @@ const ADJ = ["旗艦","極簡","模組化","永續環保","次世代","客製化
 const CLIENTS = ["國際大廠","新創團隊","日系客戶","歐洲品牌","電信商","車廠","運動品牌","醫療客戶","教育單位","遊戲公司"];
 
 /* ========================================================================
-   game state
+   floors  —  each floor is an independent map
+   ===================================================================== */
+function makeGrid(){
+  const b = Array.from({length:ROWS}, ()=>Array(COLS).fill(false));
+  for(let x=0;x<COLS;x++){b[0][x]=b[ROWS-1][x]=true;}
+  for(let y=0;y<ROWS;y++){b[y][0]=b[y][COLS-1]=true;}
+  return b;
+}
+function buildFloor1(){
+  const blocked=makeGrid(), decor=[], walls=[];
+  const D=(x,y,em,size)=>{decor.push({x,y,em,size:size||30}); blocked[y][x]=true;};
+  const W=(x,y)=>{walls.push({x,y}); blocked[y][x]=true;};
+  // your desk
+  D(2,14,"🖥️");D(3,15,"🖥️");D(2,16,"🪑",26);D(4,16,"🪴",26);
+  // designer work area
+  D(7,12,"🖥️");D(9,12,"🖥️");D(7,14,"🖥️");D(9,14,"🖥️");D(10,15,"🪴",26);
+  // UX research
+  D(13,12,"🖥️");D(15,12,"🖥️");D(14,14,"🧩",28);D(16,14,"🪴",26);
+  // model workshop
+  D(20,12,"🛠️");D(22,12,"🖨️");D(20,14,"🪚",28);D(22,14,"📦",28);D(23,15,"🪴",26);
+  // meeting room
+  D(5,3,"🪑",26);D(7,3,"🪑",26);D(6,3,"🍩",26);D(5,5,"🪑",26);D(7,5,"🪑",26);
+  // presentation
+  D(13,3,"📽️");D(15,3,"📊",28);D(14,5,"🖼️",28);
+  // director office
+  D(20,3,"🖥️");D(22,3,"🏆",28);D(21,5,"🪴",26);D(23,3,"🛋️",28);
+  // pantry
+  D(11,9,"☕");D(13,9,"🧃",26);D(12,10,"🍪",26);
+  // reception
+  D(2,7,"🛎️",26);D(2,9,"🪴",26);D(4,9,"🖥️");
+  // plants
+  D(17,8,"🪴",26);D(9,8,"🪴",26);D(18,16,"🪴",26);
+  // partitions
+  for(let x=3;x<=9;x++) if(x!==6) W(x,1);
+  for(let y=2;y<=5;y++) W(9,y);
+  for(let y=2;y<=5;y++) W(18,y);
+  W(10,1);W(11,1);W(12,1);
+  // elevator
+  const elevator={x:18,y:9}; blocked[9][18]=true;
+  return {
+    name:"設計中心 1F", blocked, decor, walls, elevator,
+    pantry:{x:12,y:9}, start:{x:3,y:14},
+    zones:[
+      {x:3,y:14,name:"你的座位"},{x:8,y:13,name:"設計師工作區"},{x:14,y:13,name:"UX 研究室"},
+      {x:21,y:13,name:"模型工作坊"},{x:6,y:4,name:"會議室"},{x:14,y:4,name:"提案簡報區"},
+      {x:21,y:4,name:"總監辦公室"},{x:12,y:9,name:"茶水間"},{x:3,y:8,name:"大廳接待"},{x:18,y:9,name:"電梯"},
+    ],
+    npcs:[
+      {id:"zhe",x:8,y:11,face:"🧑‍🎨",name:"阿哲學長",role:"資深工業設計師",spec:"sketch",
+        hi:["新來的？剛好有個造型的活兒，想不想練練手？","菜鳥！這個 sketch 交給你了。","來得正好，這個設計提案缺人。"]},
+      {id:"ting",x:14,y:11,face:"👩‍💻",name:"小婷",role:"UX 設計師",spec:"ux",
+        hi:["我在做使用者研究，你來幫我看看流程？","有個 UX 痛點要解，交給你囉。","來，這個互動體驗你來設計。"]},
+      {id:"wang",x:21,y:11,face:"🧑‍🔧",name:"老王師傅",role:"模型工程師",spec:"material",
+        hi:["模型間永遠缺人！這個打樣你來。","材料選對了，產品就成功一半。","來動手做，這個結構交給你。"]},
+      {id:"kevin",x:6,y:6,face:"🧑‍💼",name:"Kevin",role:"產品經理 PM",spec:"ux",
+        hi:["客戶又改需求了…你能接嗎？","市場等著這個 spec，拜託你了。","開會結論：這個功能你負責。"]},
+      {id:"amy",x:14,y:6,face:"🧑‍🏫",name:"Amy",role:"簡報設計顧問",spec:"present",
+        hi:["提案要打動人，靠的是簡報。你來做一份。","把你的設計說成故事，來練練。","下週要對客戶提案，這份給你。"]},
+      {id:"boss",x:21,y:6,face:"👔",name:"陳總監",role:"設計中心總監",spec:"present",
+        hi:["年輕人，敢不敢接下這個旗艦專案？","做得好，我給你升職。","公司押寶這個產品，別讓我失望。"]},
+      {id:"lab",x:16,y:11,face:"👩‍🔬",name:"Dr. Lin",role:"材料研究員",spec:"material",
+        hi:["新的環保材料剛到，來試做一個？","永續設計是未來，這個你來。","實驗室有個有趣的專案。"]},
+    ],
+  };
+}
+function buildFloor2(){
+  const blocked=makeGrid(), decor=[], walls=[];
+  const D=(x,y,em,size)=>{decor.push({x,y,em,size:size||30}); blocked[y][x]=true;};
+  const W=(x,y)=>{walls.push({x,y}); blocked[y][x]=true;};
+  // showcase center
+  D(3,12,"🏆",28);D(5,12,"📱");D(7,12,"💻");D(9,12,"⌚",28);
+  D(4,14,"🎧");D(6,14,"🖱️",28);D(8,14,"🎮",28);D(10,15,"🪴",26);
+  // user testing room
+  D(13,12,"🖥️");D(15,12,"🪟",28);D(14,14,"🪑",26);D(16,14,"🪴",26);
+  // VIP lounge
+  D(5,3,"🛋️",28);D(7,3,"☕");D(6,5,"🍵",28);
+  // roof garden (pantry)
+  D(12,3,"🌳");D(14,3,"🌸",28);D(13,5,"⛲",30);
+  // master studio
+  D(20,3,"🗿",28);D(22,3,"🖌️",28);D(21,5,"🎨");D(23,5,"🪴",26);
+  // workshop-ish bottom right
+  D(20,12,"🧵",28);D(22,12,"📐",28);D(21,14,"📦",28);D(23,15,"🪴",26);
+  // plants / atrium
+  D(17,8,"🪴",26);D(10,15,"🪴",26);D(18,15,"🪴",26);D(4,8,"🖼️",28);
+  // partitions (mirror layout)
+  for(let x=3;x<=9;x++) if(x!==6) W(x,1);
+  for(let y=2;y<=5;y++) W(9,y);
+  for(let y=2;y<=5;y++) W(18,y);
+  W(10,1);W(11,1);W(12,1);
+  const elevator={x:18,y:9}; blocked[9][18]=true;
+  return {
+    name:"研發展示大樓 2F", blocked, decor, walls, elevator,
+    pantry:{x:13,y:4}, start:{x:17,y:9},
+    zones:[
+      {x:6,y:13,name:"產品展示中心"},{x:14,y:13,name:"使用者測試室"},{x:21,y:13,name:"打樣工坊"},
+      {x:6,y:4,name:"VIP 洽談室"},{x:13,y:4,name:"頂樓花園"},{x:21,y:4,name:"大師工作室"},
+      {x:9,y:8,name:"中庭"},{x:18,y:9,name:"電梯"},
+    ],
+    npcs:[
+      {id:"vip",x:6,y:6,face:"🧑‍💼",name:"Mr. Tanaka",role:"VIP 大客戶",spec:"present",
+        hi:["我要的是能驚艷市場的設計，你行嗎？","預算不是問題，給我最好的。","這個旗艦案，我只信任高手。"]},
+      {id:"master",x:21,y:6,face:"🧓",name:"林大師",role:"傳奇設計顧問",spec:"render",
+        hi:["年輕人，讓我看看你的渲染功力。","真正的設計是修行，接下這個。","能通過我這關，你就出師了。"]},
+      {id:"tester",x:14,y:11,face:"🧑‍🔬",name:"測試員 Joy",role:"使用者測試員",spec:"ux",
+        hi:["受測者回饋一堆問題，你來優化？","可用性測試出爐，改設計吧。","數據會說話，這個交給你。"]},
+      {id:"press",x:9,y:8,face:"🎙️",name:"記者 May",role:"設計媒體記者",spec:"present",
+        hi:["讀者想看你的設計故事，接受採訪？","幫我準備一個能上頭條的案子。","這個曝光機會給你，別搞砸。"]},
+      {id:"maker",x:21,y:11,face:"👷",name:"阿德",role:"打樣技師",spec:"material",
+        hi:["新製程剛導入，來試量產打樣。","公差要抓緊，這個結構你負責。","來，把設計變成真實產品。"]},
+    ],
+  };
+}
+const FLOORS = [buildFloor1(), buildFloor2()];
+let curFloor = 0;
+let FLOOR = FLOORS[0];
+
+/* ========================================================================
+   achievements
+   ===================================================================== */
+const ACH = [
+  {id:"first",  em:"🎯", name:"菜鳥出擊",   desc:"完成第一個設計任務", chk:s=>s.tasksDone>=1},
+  {id:"t10",    em:"💪", name:"設計勞模",   desc:"完成 10 個任務",     chk:s=>s.tasksDone>=10},
+  {id:"t50",    em:"🏭", name:"設計量產機", desc:"完成 50 個任務",     chk:s=>s.tasksDone>=50},
+  {id:"lv5",    em:"⭐", name:"嶄露頭角",   desc:"達到 Lv.5",          chk:s=>s.level>=5},
+  {id:"lv15",   em:"🌟", name:"獨當一面",   desc:"達到 Lv.15",         chk:s=>s.level>=15},
+  {id:"promo",  em:"🎖️", name:"升官發財",   desc:"第一次升職",         chk:s=>rankIndex()>=1},
+  {id:"dir",    em:"👔", name:"總監之路",   desc:"升上設計總監",       chk:s=>rankIndex()>=11},
+  {id:"rich",   em:"💰", name:"第一桶金",   desc:"現金累積達 100,000", chk:s=>s.cash>=100000},
+  {id:"sk10",   em:"🧠", name:"一技之長",   desc:"任一技能達 Lv.10",   chk:s=>Object.values(s.skills).some(k=>k.lv>=10)},
+  {id:"skall",  em:"🎨", name:"全才設計師", desc:"所有技能達 Lv.5",    chk:s=>Object.values(s.skills).every(k=>k.lv>=5)},
+  {id:"f2",     em:"🛗", name:"登上大樓",   desc:"搭電梯到二樓",       chk:s=>!!s.visited2},
+  {id:"explore",em:"🗺️", name:"地圖探險家", desc:"探索 200 格地圖",    chk:s=>seenCount(s)>=200},
+];
+function seenCount(s){ return Object.values(s.seen||{}).reduce((a,o)=>a+Object.keys(o).length,0); }
+
+/* ========================================================================
+   state
    ===================================================================== */
 let S;
 function freshState(){
   return {
     level:1, exp:0, rep:0, cash:0, energy:100, tasksDone:0,
     skills:Object.fromEntries(SKILL_KEYS.map(k=>[k,{lv:1,xp:0}])),
-    quest:null,                 // active quest
-    npcQuestReady:{},           // npcId -> quest offer object (cached)
-    seen:{},                    // discovered tiles "x,y" -> true
-    px:3, py:14,                // player grid pos
+    quest:null, npcQuestReady:{},
+    seen:{0:{},1:{}},
+    px:3, py:14, floor:0,
+    ach:{}, sound:true, visited2:false,
   };
 }
 function expNeed(lv){ return Math.floor(60 * Math.pow(1.28, lv-1)); }
@@ -323,10 +400,44 @@ function rankName(){
 function salary(){
   return Math.floor((30000 + S.rep*90) * Math.pow(1.16, S.level-1) * (1 + rankIndex()*0.28));
 }
-function fmt(n){ return n.toLocaleString('en-US'); }
+function fmt(n){ return Math.floor(n).toLocaleString('en-US'); }
 
 /* ========================================================================
-   rendering — svg layers
+   audio (WebAudio synth, no external files)
+   ===================================================================== */
+let actx=null;
+function initAudio(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
+function tone(freq,start,dur,type,vol){
+  if(!actx) return;
+  const t=actx.currentTime+start;
+  const o=actx.createOscillator(), g=actx.createGain();
+  o.type=type||"sine"; o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.linearRampToValueAtTime(vol||0.15,t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(actx.destination);
+  o.start(t); o.stop(t+dur+0.03);
+}
+function sfx(name){
+  if(!S||!S.sound||!actx) return;
+  switch(name){
+    case "step":     tone(170,0,0.05,"triangle",0.04); break;
+    case "click":    tone(440,0,0.06,"square",0.06); break;
+    case "accept":   tone(523,0,0.08,"square",0.1); tone(784,0.08,0.1,"square",0.1); break;
+    case "sprint":   tone(280+Math.random()*90,0,0.05,"sawtooth",0.05); break;
+    case "complete": [523,659,784,1047].forEach((f,i)=>tone(f,i*0.08,0.16,"sine",0.13)); break;
+    case "level":    [659,784,988,1319].forEach((f,i)=>tone(f,i*0.09,0.2,"triangle",0.14)); break;
+    case "rank":     [523,659,784,1047,1319].forEach((f,i)=>tone(f,i*0.1,0.3,"sine",0.15)); break;
+    case "coffee":   tone(400,0,0.1,"sine",0.09); tone(620,0.1,0.15,"sine",0.09); break;
+    case "achieve":  [784,1047,1319,1568].forEach((f,i)=>tone(f,i*0.09,0.24,"triangle",0.14)); break;
+    case "elevator": tone(520,0,0.14,"sine",0.08); tone(420,0.15,0.2,"sine",0.08); break;
+    case "good":     tone(700,0,0.08,"sine",0.09); tone(950,0.08,0.1,"sine",0.09); break;
+    case "bad":      tone(200,0,0.22,"sawtooth",0.09); break;
+  }
+}
+
+/* ========================================================================
+   rendering
    ===================================================================== */
 const stage = $("stage");
 let layers = {};
@@ -339,34 +450,33 @@ function buildLayers(){
   });
   drawFloor(); drawDecor(); drawLabels(); drawNpcs(); drawPlayer(); drawFog();
 }
-function tileVisible(x,y){ return !!S.seen[x+","+y]; }
+function tileVisible(x,y){ return !!(S.seen[curFloor] && S.seen[curFloor][x+","+y]); }
 
 function drawFloor(){
+  const {blocked,decor,walls}=FLOOR;
   let html="";
   for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
-    const wall = blocked[y][x] && !decor.some(d=>d.x===x&&d.y===y) &&
+    const isDecor = decor.some(d=>d.x===x&&d.y===y);
+    const wall = blocked[y][x] && !isDecor &&
                  (x===0||y===0||x===COLS-1||y===ROWS-1||walls.some(w=>w.x===x&&w.y===y));
     const fill = wall ? "#20283a" : ((x+y)%2? "#12171f":"#141a24");
     html += `<rect x="${x*T}" y="${y*T}" width="${T}" height="${T}" fill="${fill}" stroke="#0c1016" stroke-width="1"/>`;
     if(wall) html += `<rect x="${x*T+3}" y="${y*T+3}" width="${T-6}" height="${T-6}" fill="none" stroke="#2f3b52" stroke-width="1.5" rx="4"/>`;
   }
-  // carpet accents under zones
   layers.floor.innerHTML = html;
 }
 function emojiText(x,y,em,size){
   return `<text x="${x*T+T/2}" y="${y*T+T/2}" font-size="${size}" text-anchor="middle" dominant-baseline="central">${em}</text>`;
 }
-function drawDecor(){
-  layers.decor.innerHTML = decor.map(d=>emojiText(d.x,d.y,d.em,d.size)).join("");
-}
+function drawDecor(){ layers.decor.innerHTML = FLOOR.decor.map(d=>emojiText(d.x,d.y,d.em,d.size)).join(""); }
 function drawLabels(){
-  layers.label.innerHTML = zones.map(z=>
+  layers.label.innerHTML = FLOOR.zones.map(z=>
     `<text x="${z.x*T+T/2}" y="${z.y*T-T*0.7}" font-size="12" fill="#4a5a78" text-anchor="middle" font-weight="700" letter-spacing="1">${z.name}</text>`
   ).join("");
 }
 function drawNpcs(){
-  layers.npc.innerHTML = NPCS.map(n=>{
-    const ready = true; // always has a quest available
+  // NPCs
+  layers.npc.innerHTML = FLOOR.npcs.map(n=>{
     const active = S.quest && S.quest.npc===n.id;
     let mark = "";
     if(active){
@@ -381,10 +491,18 @@ function drawNpcs(){
       <text x="${n.x*T+T/2}" y="${n.y*T+T*0.72}" font-size="10" fill="#9fb0c8" text-anchor="middle" font-weight="700">${n.name}</text>
       ${mark}</g>`;
   }).join("");
-  // click handlers
+  // elevator
+  const e=FLOOR.elevator;
+  layers.npc.innerHTML += `<g data-elev="1" style="cursor:pointer">
+    ${emojiText(e.x,e.y,"🛗",34)}
+    <text x="${e.x*T+T/2}" y="${e.y*T-T*0.35}" font-size="16" text-anchor="middle">⬆️
+      <animate attributeName="opacity" values="0.4;1;0.4" dur="1.4s" repeatCount="indefinite"/></text>
+    <text x="${e.x*T+T/2}" y="${e.y*T+T*0.72}" font-size="10" fill="#5aa9ff" text-anchor="middle" font-weight="700">電梯</text>
+    </g>`;
   layers.npc.querySelectorAll("[data-npc]").forEach(g=>{
     g.addEventListener("click", e=>{ e.stopPropagation(); goToNpc(g.getAttribute("data-npc")); });
   });
+  layers.npc.querySelector("[data-elev]").addEventListener("click", e=>{ e.stopPropagation(); goToElevator(); });
 }
 let playerEl;
 function drawPlayer(){
@@ -401,35 +519,34 @@ function drawFog(){
     if(!tileVisible(x,y))
       html += `<rect x="${x*T}" y="${y*T}" width="${T}" height="${T}" fill="#05070b"/>`;
     else {
-      // soft dim on edge of vision
       const d = Math.max(Math.abs(x-S.px), Math.abs(y-S.py));
       if(d>=3) html += `<rect x="${x*T}" y="${y*T}" width="${T}" height="${T}" fill="rgba(5,7,11,0.45)"/>`;
     }
   }
   layers.fog.innerHTML = html;
 }
-
-/* ---------- reveal fog ---------- */
 function reveal(cx,cy){
+  const seen=S.seen[curFloor];
   let changed=false;
   for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
     const x=cx+dx,y=cy+dy;
     if(x<0||y<0||x>=COLS||y>=ROWS) continue;
-    if(Math.max(Math.abs(dx),Math.abs(dy))<=3 && !S.seen[x+","+y]){ S.seen[x+","+y]=true; changed=true; }
+    if(Math.max(Math.abs(dx),Math.abs(dy))<=3 && !seen[x+","+y]){ seen[x+","+y]=true; changed=true; }
   }
   return changed;
 }
 
 /* ========================================================================
-   movement — smooth pixel lerp along BFS path + camera follow
+   movement
    ===================================================================== */
-let px = 3*T+T/2, py = 14*T+T/2;       // player pixel pos
+let px = 3*T+T/2, py = 14*T+T/2;
 let camX = px, camY = py;
-let path = [];                          // array of {x,y} grid tiles to walk
-let pendingNpc = null;
-let bob = 0;
+let path = [];
+let pendingNpc = null, pendingElev = false;
+let bob = 0, stepCount = 0;
 
 function bfs(sx,sy,tx,ty){
+  const blocked=FLOOR.blocked;
   if(sx===tx&&sy===ty) return [];
   const q=[[sx,sy]], prev={}; prev[sx+","+sy]=null;
   const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
@@ -451,7 +568,8 @@ function bfs(sx,sy,tx,ty){
   }
   return null;
 }
-function nearestOpen(tx,ty){    // for walking next to an obstacle (npc)
+function nearestOpen(tx,ty){
+  const blocked=FLOOR.blocked;
   if(!blocked[ty]?.[tx]) return {x:tx,y:ty};
   const dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
   for(const [dx,dy] of dirs){ const x=tx+dx,y=ty+dy;
@@ -460,29 +578,35 @@ function nearestOpen(tx,ty){    // for walking next to an obstacle (npc)
 }
 function moveTo(tx,ty){
   if(tx<0||ty<0||tx>=COLS||ty>=ROWS) return;
-  if(blocked[ty][tx]) return;
+  if(FLOOR.blocked[ty][tx]) return;
   const p = bfs(S.px,S.py,tx,ty);
-  if(p && p.length) path = p;
+  if(p && p.length){ path = p; sfx("click"); }
 }
 function step(dx,dy){
   const nx=S.px+dx, ny=S.py+dy;
-  if(nx<0||ny<0||nx>=COLS||ny>=ROWS||blocked[ny][nx]) return;
+  if(nx<0||ny<0||nx>=COLS||ny>=ROWS||FLOOR.blocked[ny][nx]) return;
   path=[{x:nx,y:ny}];
 }
 function goToNpc(id){
-  const n = NPCS.find(a=>a.id===id); if(!n) return;
-  // already adjacent?
+  const n = FLOOR.npcs.find(a=>a.id===id); if(!n) return;
+  pendingElev=false;
   if(Math.abs(S.px-n.x)+Math.abs(S.py-n.y)<=1){ openNpc(n); return; }
   const open = nearestOpen(n.x,n.y); if(!open) return;
   const p = bfs(S.px,S.py,open.x,open.y);
-  if(p){ path=p; pendingNpc=n; }
+  if(p){ path=p; pendingNpc=n; sfx("click"); }
+}
+function goToElevator(){
+  const e=FLOOR.elevator; pendingNpc=null;
+  if(Math.abs(S.px-e.x)+Math.abs(S.py-e.y)<=1){ useElevator(); return; }
+  const open=nearestOpen(e.x,e.y); if(!open) return;
+  const p=bfs(S.px,S.py,open.x,open.y);
+  if(p){ path=p; pendingElev=true; sfx("click"); }
 }
 
-/* ---------- click / keyboard ---------- */
 stage.addEventListener("click", e=>{
   const pt = svgPoint(e);
   const gx = Math.floor(pt.x/T), gy = Math.floor(pt.y/T);
-  pendingNpc=null;
+  pendingNpc=null; pendingElev=false;
   moveTo(gx,gy);
 });
 function svgPoint(e){
@@ -493,6 +617,7 @@ function svgPoint(e){
   return {x,y};
 }
 document.addEventListener("keydown", e=>{
+  if($("overlay").style.display==="flex"){ if(e.key==="Escape") closeModal(); return; }
   const k=e.key.toLowerCase();
   if(["arrowup","w"].includes(k)){step(0,-1);e.preventDefault();}
   else if(["arrowdown","s"].includes(k)){step(0,1);e.preventDefault();}
@@ -501,15 +626,16 @@ document.addEventListener("keydown", e=>{
   else if(k==="e"||k===" "){ tryInteractHere(); e.preventDefault(); }
 });
 function tryInteractHere(){
-  for(const n of NPCS) if(Math.abs(S.px-n.x)+Math.abs(S.py-n.y)<=1){ openNpc(n); return; }
+  const e=FLOOR.elevator;
+  if(Math.abs(S.px-e.x)+Math.abs(S.py-e.y)<=1){ useElevator(); return; }
+  for(const n of FLOOR.npcs) if(Math.abs(S.px-n.x)+Math.abs(S.py-n.y)<=1){ openNpc(n); return; }
 }
 
 /* ========================================================================
-   main loop — animate player + camera
+   main loop
    ===================================================================== */
-const SPEED = 4.2;   // px per frame
+const SPEED = 4.2;
 function tick(){
-  // move along path
   if(path.length){
     const tgt = path[0];
     const tx = tgt.x*T+T/2, ty = tgt.y*T+T/2;
@@ -517,12 +643,14 @@ function tick(){
     if(dist < SPEED){
       px=tx; py=ty; S.px=tgt.x; S.py=tgt.y; path.shift();
       onEnterTile();
-      if(path.length===0 && pendingNpc){ const n=pendingNpc; pendingNpc=null; openNpc(n); }
+      if(path.length===0){
+        if(pendingNpc){ const n=pendingNpc; pendingNpc=null; openNpc(n); }
+        else if(pendingElev){ pendingElev=false; useElevator(); }
+      }
     } else { px += dx/dist*SPEED; py += dy/dist*SPEED; }
     bob += 0.35;
   } else { bob = 0; }
 
-  // camera follow (lerp)
   const vw = stage.viewBox.baseVal.width || COLS*T;
   const vh = stage.viewBox.baseVal.height || ROWS*T;
   let tCamX = clamp(px, vw/2, COLS*T - vw/2);
@@ -542,20 +670,21 @@ function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 let lastZone="";
 function onEnterTile(){
   if(reveal(S.px,S.py)) drawFog(); else drawFog();
-  // zone tag
+  stepCount++; if(stepCount%2===0) sfx("step");
   let z = nearestZone();
   if(z && z.name!==lastZone){ lastZone=z.name; showZone(z.name); }
-  // pantry energy
+  const pantry=FLOOR.pantry;
   if(Math.abs(S.px-pantry.x)+Math.abs(S.py-pantry.y)<=1 && S.energy<100){
-    S.energy = 100; log("☕ 在茶水間喝了咖啡，精力全滿！","y"); updateHUD();
+    S.energy = 100; sfx("coffee");
+    log(curFloor===0?"☕ 在茶水間喝了咖啡，精力全滿！":"🌳 在頂樓花園放鬆一下，精力全滿！","y"); updateHUD();
   }
-  // random exploration event
   maybeEvent();
+  checkAch();
   save();
 }
 function nearestZone(){
   let best=null,bd=1e9;
-  for(const z of zones){ const d=Math.abs(z.x-S.px)+Math.abs(z.y-S.py); if(d<bd){bd=d;best=z;} }
+  for(const z of FLOOR.zones){ const d=Math.abs(z.x-S.px)+Math.abs(z.y-S.py); if(d<bd){bd=d;best=z;} }
   return bd<=4?best:null;
 }
 function showZone(name){
@@ -563,7 +692,6 @@ function showZone(name){
   clearTimeout(showZone._t); showZone._t=setTimeout(()=>el.style.opacity=0.35,1800);
 }
 
-/* ---------- random events while exploring ---------- */
 let stepsSinceEvent=0;
 function maybeEvent(){
   stepsSinceEvent++;
@@ -574,18 +702,42 @@ function maybeEvent(){
     if(roll<0.4){
       const k=SKILL_KEYS[Math.floor(Math.random()*SKILL_KEYS.length)];
       gainSkill(k, Math.ceil(skillXpNeed(S.skills[k].lv)*0.3));
-      log(`✨ 靈感一閃！${SKILLS[k].em}${SKILLS[k].name} 有所領悟。`,"pu");
+      log(`✨ 靈感一閃！${SKILLS[k].em}${SKILLS[k].name} 有所領悟。`,"pu"); sfx("good");
     } else if(roll<0.7){
       const g=Math.floor(salary()/40*(1+Math.random()));
-      S.cash+=g; log(`🎉 撿到主管掉的加班費 +$${fmt(g)}`,"y"); updateHUD();
+      S.cash+=g; log(`🎉 撿到主管掉的加班費 +$${fmt(g)}`,"y"); sfx("good"); updateHUD();
     } else if(roll<0.88){
       const g=8+Math.floor(Math.random()*12);
-      S.rep+=g; log(`👏 幫同事解圍，聲望 +${g}`,"p"); updateHUD();
+      S.rep+=g; log(`👏 幫同事解圍，聲望 +${g}`,"p"); sfx("good"); updateHUD();
     } else {
       S.energy=Math.max(0,S.energy-12);
-      log("😵 走廊被抓去開臨時會議，精力 -12","r"); updateHUD();
+      log("😵 走廊被抓去開臨時會議，精力 -12","r"); sfx("bad"); updateHUD();
     }
   }
+}
+
+/* ========================================================================
+   elevator / floor switch
+   ===================================================================== */
+function useElevator(){ switchFloor(curFloor===0?1:0); }
+function switchFloor(to){
+  sfx("elevator");
+  const wrap=$("stageWrap");
+  wrap.style.opacity=0;
+  setTimeout(()=>{
+    curFloor=to; FLOOR=FLOORS[to]; S.floor=to;
+    if(!S.seen[to]) S.seen[to]={};
+    if(to===1) S.visited2=true;
+    const open=nearestOpen(FLOOR.elevator.x,FLOOR.elevator.y) || FLOOR.start;
+    S.px=open.x; S.py=open.y;
+    px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
+    path=[]; pendingNpc=null; pendingElev=false; lastZone="";
+    buildLayers(); reveal(S.px,S.py); drawFog();
+    $("floorTxt").textContent=FLOOR.name;
+    log("🛗 搭電梯來到「"+FLOOR.name+"」","b");
+    checkAch(); save();
+    wrap.style.opacity=1;
+  }, 280);
 }
 
 /* ========================================================================
@@ -595,35 +747,35 @@ function makeQuest(npc){
   const [pn,pe] = PRODUCTS[Math.floor(Math.random()*PRODUCTS.length)];
   const adj = ADJ[Math.floor(Math.random()*ADJ.length)];
   const client = CLIENTS[Math.floor(Math.random()*CLIENTS.length)];
-  const diff = 1 + Math.floor(Math.random()*3);         // 1..3 stars
-  const lvlF = 1 + (S.level-1)*0.35;
-  const goal = Math.floor((40 + diff*30) * (1+ (S.level-1)*0.12)); // work points needed
-  const expR = Math.floor(expNeed(S.level)*(0.35+diff*0.22));
-  const repR = Math.floor((6+diff*7) * (1+(S.level-1)*0.06));
-  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6));
+  const floorBonus = curFloor===1 ? 1.6 : 1;   // floor 2 quests are richer & harder
+  const diff = 1 + Math.floor(Math.random()*3) + (curFloor===1?1:0);
+  const goal = Math.floor((40 + diff*30) * (1+ (S.level-1)*0.12));
+  const expR = Math.floor(expNeed(S.level)*(0.35+diff*0.22)*floorBonus);
+  const repR = Math.floor((6+diff*7) * (1+(S.level-1)*0.06) * floorBonus);
+  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6) * floorBonus);
   const skR  = Math.floor(skillXpNeed(S.skills[npc.spec].lv)*(0.5+diff*0.3));
   return {
-    npc:npc.id, title:`${adj}${pn}`, emoji:pe, client, diff,
+    npc:npc.id, npcName:npc.name, npcFace:npc.face,
+    title:`${adj}${pn}`, emoji:pe, client, diff,
     skill:npc.spec, goal, prog:0,
     rewards:{exp:expR, rep:repR, cash:cashR, skill:skR},
   };
 }
 function openNpc(n){
   const overlay=$("overlay"), modal=$("modal");
+  sfx("click");
   if(S.quest){
     if(S.quest.npc===n.id){
       modal.innerHTML = npcHeader(n) +
         `<div class="say">「這個 ${S.quest.emoji} <b>${S.quest.title}</b> 你還在做呢，加油！」</div>
          <div class="modalBtns"><button class="btn" onclick="closeModal()">回去工作 ✏️</button></div>`;
     } else {
-      const other = NPCS.find(a=>a.id===S.quest.npc);
       modal.innerHTML = npcHeader(n) +
-        `<div class="say">「你先把 ${other?other.name:"手上"} 的案子做完吧，一次一個專案比較實在。」</div>
+        `<div class="say">「你先把 ${S.quest.npcName} 的案子做完吧，一次一個專案比較實在。」</div>
          <div class="modalBtns"><button class="btn sec" onclick="closeModal()">好的</button></div>`;
     }
     overlay.style.display="flex"; return;
   }
-  // fresh offer (cache per npc so it doesn't reroll on reopen)
   if(!S.npcQuestReady[n.id]) S.npcQuestReady[n.id]=makeQuest(n);
   const q = S.npcQuestReady[n.id];
   const hi = n.hi[Math.floor(Math.random()*n.hi.length)];
@@ -652,13 +804,11 @@ function closeModal(){ $("overlay").style.display="none"; }
 function acceptQuest(id){
   const q=S.npcQuestReady[id]; if(!q) return;
   S.quest=q; delete S.npcQuestReady[id];
-  closeModal(); renderTask(); drawNpcs();
-  const n=NPCS.find(a=>a.id===id);
-  log(`📋 接下 ${q.emoji}「${q.title}」(${n.name})`,"b"); save();
+  closeModal(); renderTask(); drawNpcs(); sfx("accept");
+  log(`📋 接下 ${q.emoji}「${q.title}」(${q.npcName})`,"b"); save();
 }
 $("overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeModal(); });
 
-/* ---------- task panel & working ---------- */
 function renderTask(){
   const body=$("taskBody"), q=S.quest;
   if(!q){
@@ -674,7 +824,7 @@ function renderTask(){
     <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
     <div class="qmeta"><span>進度 ${Math.floor(pct)}%</span><span>💰$${fmt(q.rewards.cash)} · ⭐${q.rewards.exp}</span></div>
     <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力設計！ <span style="font-size:11px">(⚡6)</span></button>
-    <div style="font-size:11px;color:var(--dim);text-align:center;margin-top:6px">技能越高，自動進度越快 · 按住空白鍵也行</div>`;
+    <div style="font-size:11px;color:var(--dim);text-align:center;margin-top:6px">技能越高，自動進度越快 · 也可按空白鍵</div>`;
   updateSprintBtn();
 }
 function updateSprintBtn(){
@@ -687,16 +837,15 @@ function sprint(){
   S.energy-=6;
   const sk=S.skills[S.quest.skill];
   const gain = 8*(1+sk.lv*0.12) + Math.random()*4;
+  sfx("sprint");
   addProgress(gain, true);
   updateHUD();
 }
-// auto progress tick
 setInterval(()=>{
   if(S.quest){
     const sk=S.skills[S.quest.skill];
     addProgress(0.5*(1+sk.lv*0.14), false);
   }
-  // energy slow regen
   if(S.energy<100){ S.energy=Math.min(100, S.energy+0.6); updateHUD(); }
 }, 240);
 
@@ -723,9 +872,9 @@ function completeQuest(){
   S.tasksDone++;
   gainSkill(q.skill, q.rewards.skill);
   log(`✅ 完成 ${q.emoji}「${q.title}」→ 💰$${fmt(q.rewards.cash)} 🏆+${q.rewards.rep} ⭐+${q.rewards.exp}`,"g");
-  floatText("✅ 完成!", "#ffce54", 24);
+  floatText("✅ 完成!", "#ffce54", 24); sfx("complete");
   gainExp(q.rewards.exp);
-  renderTask(); drawNpcs(); updateHUD(); save();
+  renderTask(); drawNpcs(); updateHUD(); checkAch(); save();
 }
 
 /* ========================================================================
@@ -736,17 +885,16 @@ function gainExp(n){
   let need=expNeed(S.level);
   while(S.exp>=need){
     S.exp-=need; S.level++;
-    const oldRank=rankName();
     need=expNeed(S.level);
     log(`⬆️ 升級！ 現在 Lv.${S.level}，月薪調整為 $${fmt(salary())}`,"y");
-    toast(`⬆️ LEVEL UP · Lv.${S.level}`);
-    // rank up?
+    toast(`⬆️ LEVEL UP · Lv.${S.level}`); sfx("level");
     if((S.level-1)%3===0){
       log(`🎖️ 恭喜升職：<b>${rankName()}</b>！`,"pu");
-      setTimeout(()=>toast("🎖️ 升職！ "+rankName()), 1400);
+      const rn=rankName();
+      setTimeout(()=>{ toast("🎖️ 升職！ "+rn); sfx("rank"); }, 1400);
     }
   }
-  updateHUD();
+  updateHUD(); checkAch();
 }
 function gainSkill(k,n){
   const s=S.skills[k]; s.xp+=n;
@@ -754,7 +902,40 @@ function gainSkill(k,n){
   while(s.xp>=need){ s.xp-=need; s.lv++; need=skillXpNeed(s.lv);
     log(`🧠 ${SKILLS[k].em}${SKILLS[k].name} 升到 Lv.${s.lv}！`,"b");
   }
-  renderSkills();
+  renderSkills(); checkAch();
+}
+
+/* ========================================================================
+   achievements
+   ===================================================================== */
+function checkAch(){
+  for(const a of ACH){
+    if(!S.ach[a.id] && a.chk(S)){
+      S.ach[a.id]=true;
+      log(`🏅 解鎖成就「${a.em} ${a.name}」— ${a.desc}`,"y");
+      toast(`🏅 成就解鎖 · ${a.em} ${a.name}`); sfx("achieve");
+    }
+  }
+  updateAchChip();
+}
+function updateAchChip(){
+  const got=Object.keys(S.ach).filter(k=>S.ach[k]).length;
+  $("achTxt").textContent=got+"/"+ACH.length;
+}
+function openAch(){
+  sfx("click");
+  const got=Object.keys(S.ach).filter(k=>S.ach[k]).length;
+  const rows=ACH.map(a=>{
+    const un=!!S.ach[a.id];
+    return `<div class="achrow ${un?'':'locked'}">
+      <div class="ae">${un?a.em:'🔒'}</div>
+      <div><div class="an">${a.name}</div><div class="ad">${a.desc}</div></div>
+      <div class="tick">${un?'✅':''}</div></div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>🏅 成就 <span style="font-size:14px;color:var(--dim)">(${got}/${ACH.length})</span></h2>
+    <div class="achlist">${rows}</div>
+    <div class="modalBtns" style="margin-top:14px"><button class="btn" onclick="closeModal()">關閉</button></div>`;
+  $("overlay").style.display="flex";
 }
 
 /* ========================================================================
@@ -809,13 +990,16 @@ function floatText(txt,color,size){
 /* ========================================================================
    save / load
    ===================================================================== */
-const KEY="dc-survivor-v1";
+const KEY="dc-survivor-v2";
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 function load(){
   try{ const raw=localStorage.getItem(KEY); if(raw){ const o=JSON.parse(raw);
-    // migrate-safe merge
     S=Object.assign(freshState(),o);
     for(const k of SKILL_KEYS) if(!S.skills[k]) S.skills[k]={lv:1,xp:0};
+    if(!S.seen) S.seen={0:{},1:{}};
+    if(!S.seen[0]) S.seen[0]={}; if(!S.seen[1]) S.seen[1]={};
+    if(!S.ach) S.ach={};
+    if(typeof S.floor!=="number") S.floor=0;
     return true; } }catch(e){}
   return false;
 }
@@ -825,14 +1009,13 @@ function resetGame(){
 }
 
 /* ========================================================================
-   viewBox sizing (responsive: keep tiles readable, camera follows)
+   viewport
    ===================================================================== */
 function fitViewport(){
   const r=$("stageWrap").getBoundingClientRect();
-  // choose visible tiles based on aspect; ~ 13 tiles wide target
   const targetTilesW = Math.min(COLS, Math.max(9, Math.round(r.width/72)));
   const vw = targetTilesW*T;
-  const vh = vw * (r.height/r.width);
+  const vh = vw * (r.height/r.width || 0.7);
   stage.setAttribute("viewBox", `${camX-vw/2} ${camY-vh/2} ${vw} ${vh}`);
 }
 window.addEventListener("resize", fitViewport);
@@ -842,15 +1025,27 @@ window.addEventListener("resize", fitViewport);
    ===================================================================== */
 function init(){
   if(!load()) S=freshState();
+  curFloor=S.floor||0; FLOOR=FLOORS[curFloor];
   px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
   buildLayers();
   reveal(S.px,S.py); drawFog();
-  renderSkills(); renderTask(); updateHUD();
+  renderSkills(); renderTask(); updateHUD(); updateAchChip();
+  $("floorTxt").textContent=FLOOR.name;
+  $("soundIco").textContent=S.sound?"🔊":"🔇";
   fitViewport();
   log("🌅 新的一天開始，歡迎來到設計中心！","b");
-  log("💡 走去找💬同事接任務，開始你的設計之路。","");
+  log("💡 找💬同事接任務，🛗 搭電梯探索二樓。","");
   requestAnimationFrame(tick);
 }
-$("goBtn").addEventListener("click", ()=>{ $("start").style.display="none"; setTimeout(fitViewport,30); });
+$("soundChip").addEventListener("click", ()=>{
+  S.sound=!S.sound; $("soundIco").textContent=S.sound?"🔊":"🔇";
+  if(S.sound) sfx("click"); save();
+});
+$("achChip").addEventListener("click", openAch);
+$("goBtn").addEventListener("click", ()=>{
+  initAudio(); if(S) S.sound=S.sound;
+  $("start").style.display="none"; setTimeout(fitViewport,30);
+  sfx("elevator");
+});
 init();
 </script>
