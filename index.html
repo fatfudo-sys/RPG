@@ -43,11 +43,14 @@
              background:#0a0e14; min-height:0; box-shadow:inset 0 0 60px rgba(0,0,0,.5);
              transition:opacity .28s ease;}
   #stage{width:100%; height:100%; display:block; cursor:pointer; touch-action:none;}
+  #daynight{position:absolute; inset:0; z-index:3; pointer-events:none; mix-blend-mode:multiply;
+            background:transparent; transition:background 1s linear;}
   #hint{position:absolute; left:10px; bottom:10px; font-size:12px; color:var(--dim);
         background:rgba(13,17,23,.7); padding:5px 9px; border-radius:8px; pointer-events:none;}
-  #zoneTag{position:absolute; left:10px; top:10px; font-size:14px; font-weight:700;
+  #zoneTag{position:absolute; left:10px; top:10px; font-size:14px; font-weight:700; z-index:4;
            background:rgba(13,17,23,.65); padding:6px 12px; border-radius:20px; border:1px solid var(--line);
            pointer-events:none; transition:opacity .3s;}
+  #hint{z-index:4;}
 
   /* ===== Side panel ===== */
   #side{width:290px; display:flex; flex-direction:column; gap:10px; min-height:0;}
@@ -151,7 +154,9 @@
     <div class="chip" id="salChip"><span>💵</span><span><span class="lbl">月薪</span> <b id="salTxt">30,000</b></span></div>
     <div class="chip" id="cashChip"><span>💰</span><span><span class="lbl">現金</span> <b id="cashTxt">0</b></span></div>
     <div class="chip" id="floorChip"><span>🏢</span><b id="floorTxt">設計中心 1F</b></div>
+    <div class="chip" id="dayChip"><span>📅</span><b id="dayTxt">Day 1</b> <span id="dailyTxt" style="color:var(--gold)"></span></div>
     <div class="chip" id="shopChip"><span>🛒</span><b>商店</b></div>
+    <div class="chip" id="bagChip"><span>🎒</span><b>背包</b></div>
     <div class="chip" id="restChip"><span>😴</span><b>休息</b></div>
     <div class="chip" id="compChip"><span>🏁</span><b>競圖</b></div>
     <div class="chip" id="boardChip"><span>📊</span><b>排行</b></div>
@@ -162,6 +167,7 @@
   <div id="main">
     <div id="stageWrap">
       <div id="zoneTag">你的座位</div>
+      <div id="daynight"></div>
       <svg id="stage" preserveAspectRatio="xMidYMid slice"></svg>
       <div id="hint">🖱️ 點地圖走動 · 點 NPC💬 接任務/交流 · 🛗 換樓層 · 🛒商店 🏁競圖 · WASD 也可</div>
     </div>
@@ -202,6 +208,8 @@
     🛗 搭電梯上 <b>研發展示大樓 2F</b>，接更高階的專案。<br>
     🛒 用現金到商店買 <b>技能與裝備</b>；💬 和同事交流拉好感，專案更快。<br>
     🔧 地圖上的物件（工作站/列印機/咖啡機/投影機/獎盃）都能 <b>點擊使用並升級</b>。<br>
+    📅 每天有不同 <b>狀態加成</b>、會發日薪、還有 <b>突發事件</b> 要你抉擇。<br>
+    🎒 完成專案有 <b>作品評級（S/A/B/C）</b> 與道具掉落，善用背包翻盤！<br>
     🏁 參加 <b>競圖大賽</b> 和對手一較高下，衝上 📊 排行榜第一！<br>
     🏅 解鎖成就、💼 職級與月薪 <b>無限升級</b>，爽爬到設計之神！<br>
     ☕ 精力用完？去茶水間回血，或按 😴 休息小憩。
@@ -273,6 +281,53 @@ const FAC = {
     desc:l=>`澆水放鬆：精力 +${8+l*4}`},
 };
 function idleRate(l){ return Math.floor(salary()/600*l); }
+
+/* ---------- daily cycle & modifiers ---------- */
+const DAY_SECONDS = 120;
+const DAILY = [
+  {id:"inspire", em:"✨", name:"靈感爆發",   desc:"技能經驗 +50%",  fx:{xp:1.5}},
+  {id:"caffeine",em:"⚡", name:"精神百倍",   desc:"精力回復 +100%", fx:{regen:2}},
+  {id:"flow",    em:"🌊", name:"心流狀態",   desc:"設計速度 +40%",  fx:{speed:1.4}},
+  {id:"bonus",   em:"🤑", name:"獎金加碼",   desc:"現金報酬 +50%",  fx:{cash:1.5}},
+  {id:"normal",  em:"🙂", name:"風平浪靜",   desc:"一切正常",       fx:{}},
+  {id:"normal2", em:"😌", name:"平常心",     desc:"一切正常",       fx:{}},
+  {id:"meetings",em:"📅", name:"會議地獄",   desc:"設計速度 -30%",  fx:{speed:0.7}},
+  {id:"monday",  em:"🥱", name:"週一症候群", desc:"精力回復 -40%",  fx:{regen:0.6}},
+];
+/* ---------- choice-based random events ---------- */
+const EVENTS = [
+  {em:"📞", title:"客戶臨時改需求", text:"客戶半夜來電要求大改方案，你怎麼辦？", choices:[
+    {label:"熬夜趕工（⚡-20，進度大增）", out:s=>{ s.energy=Math.max(0,s.energy-20); if(s.quest){ s.quest.prog+=s.quest.goal*0.3; renderTaskBarOnly(); } return "你熬夜爆肝，專案大幅推進！"; }},
+    {label:"據理力爭堅持原案", out:s=>{ if(Math.random()<0.5){ s.rep+=15; return "客戶被你說服，聲望 +15"; } s.rep=Math.max(0,s.rep-8); return "客戶不太滿意，聲望 -8"; }},
+  ]},
+  {em:"🕵️", title:"獵頭挖角", text:"別家公司開出高薪想挖你跳槽…", choices:[
+    {label:"拿 offer 談加薪", out:s=>{ const g=Math.floor(salary()*0.5); s.cash+=g; s.rep+=10; return `談判成功，+$${fmt(g)}、聲望 +10`; }},
+    {label:"婉拒，展現忠誠", out:s=>{ for(const id in s.rel) s.rel[id]=Math.min(100,s.rel[id]+10); return "同事們很感動，全體好感 +10"; }},
+  ]},
+  {em:"🤝", title:"跨部門合作", text:"工程部想找你一起做實驗性專案。", choices:[
+    {label:"接受（技能大進步）", out:s=>{ const k=SKILL_KEYS[Math.floor(Math.random()*SKILL_KEYS.length)]; gainSkill(k, skillXpNeed(s.skills[k].lv)); return `跨界學習，${SKILLS[k].em}${SKILLS[k].name} 大有進步！`; }},
+    {label:"專注本業（獎金）", out:s=>{ const g=Math.floor(salary()/5); s.cash+=g; return `你把手上案子做到最好，獎金 +$${fmt(g)}`; }},
+  ]},
+  {em:"☕", title:"前輩請喝咖啡", text:"資深前輩找你喝咖啡閒聊。", choices:[
+    {label:"開心赴約（精力滿＋好感）", out:s=>{ s.energy=maxEnergy(); const ids=Object.keys(s.rel); if(ids.length){ const id=ids[Math.floor(Math.random()*ids.length)]; s.rel[id]=Math.min(100,(s.rel[id]||0)+15); } return "收穫滿滿，精力全滿、好感提升！"; }},
+    {label:"埋頭工作（進度）", out:s=>{ if(s.quest){ s.quest.prog+=s.quest.goal*0.15; renderTaskBarOnly(); } return "你專心工作，進度小增。"; }},
+  ]},
+  {em:"💡", title:"靈感突現", text:"洗澡時突然想到絕妙點子！", choices:[
+    {label:"立刻記下來", out:s=>{ setFx("xp",2,60); return "接下來 60 秒 技能經驗 ×2！"; }},
+    {label:"先睡一覺", out:s=>{ s.energy=maxEnergy(); return "精力全滿，明天再戰。"; }},
+  ]},
+  {em:"🐛", title:"量產出包", text:"產線回報你的設計有結構問題！", choices:[
+    {label:"連夜緊急修正（⚡-15）", out:s=>{ s.energy=Math.max(0,s.energy-15); s.rep+=8; return "化險為夷，聲望 +8"; }},
+    {label:"甩鍋給工程部", out:s=>{ s.rep=Math.max(0,s.rep-12); return "甩鍋成功但團隊不滿，聲望 -12"; }},
+  ]},
+];
+/* ---------- consumable items ---------- */
+const ITEMS = {
+  energy:  {em:"🥤", name:"能量飲料", desc:"立即回復 50 精力",    price:600},
+  overtime:{em:"🎫", name:"加班券",   desc:"目前專案 +40% 進度",  price:1600},
+  muse:    {em:"💡", name:"繆思靈感", desc:"60 秒 技能經驗 ×2",   price:1300},
+  card:    {em:"💳", name:"高級名片", desc:"隨機同事好感 +25",    price:1100},
+};
 
 /* ========================================================================
    floors  —  each floor is an independent map
@@ -412,6 +467,9 @@ const ACH = [
   {id:"champ",  em:"🏁", name:"競圖冠軍",   desc:"贏得一次競圖大賽",   chk:s=>(s.compWins||0)>=1},
   {id:"top1",   em:"👑", name:"設計界之巔", desc:"聲望登上排行榜第一", chk:s=>s.rivals&&s.rivals.length&&s.rivals.every(r=>s.rep>=r.rep)},
   {id:"fac5",   em:"🏗️", name:"設備狂人",   desc:"任一設施升到 Lv5",   chk:s=>Object.values(s.fac||{}).some(v=>v>=5)},
+  {id:"sgrade", em:"🌟", name:"完美主義",   desc:"完成一件 S 級作品",  chk:s=>(s.sworks||0)>=1},
+  {id:"day7",   em:"📅", name:"資深員工",   desc:"上班滿 7 天",        chk:s=>(s.day||1)>=7},
+  {id:"collect",em:"🎒", name:"道具收藏家", desc:"同時持有 3 種道具",  chk:s=>Object.values(s.items||{}).filter(v=>v>0).length>=3},
 ];
 function seenCount(s){ return Object.values(s.seen||{}).reduce((a,o)=>a+Object.keys(o).length,0); }
 
@@ -431,6 +489,7 @@ function freshState(){
     rel:{}, rivals:initRivals(), compWins:0,
     restCdUntil:0, compCdUntil:0,
     fac:{}, facCd:{}, buffUntil:0, buffAmt:1,
+    day:1, dayClock:0, daily:null, fx:{}, items:{}, sworks:0,
   };
 }
 function initRivals(){ return RIVAL_DEFS.map(r=>({id:r.id, face:r.face, name:r.name, rep:30+Math.floor(Math.random()*90)})); }
@@ -930,7 +989,7 @@ setInterval(()=>{
     const sk=S.skills[S.quest.skill];
     addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(S.quest.npc)*coopMult()*buffMult(), false);
   }
-  if(S.energy<maxEnergy()){ S.energy=Math.min(maxEnergy(), S.energy+energyRegen()); updateHUD(); }
+  if(S.energy<maxEnergy()){ S.energy=Math.min(maxEnergy(), S.energy+energyRegen()*dailyMult("regen")*fxMult("regen")); updateHUD(); }
 }, 240);
 
 function addProgress(amt, burst){
@@ -949,18 +1008,25 @@ function renderTaskBarOnly(){
   const meta=bar.nextElementSibling;
   if(meta) meta.firstElementChild.textContent="進度 "+Math.floor(pct)+"%";
 }
+const GRADES={S:{mult:1.7,stars:"⭐⭐⭐",col:"#ffce54"},A:{mult:1.35,stars:"⭐⭐",col:"#5cd6a0"},B:{mult:1.1,stars:"⭐",col:"#5aa9ff"},C:{mult:0.9,stars:"—",col:"#8b96a8"}};
 function completeQuest(){
   const q=S.quest; S.quest=null;
-  const cash=Math.floor(q.rewards.cash*cashMult());
-  const exp =Math.floor(q.rewards.exp*xpMult());
-  S.cash += cash;
-  S.rep  += q.rewards.rep;
-  S.tasksDone++;
-  S.rel[q.npc]=Math.min(100,(S.rel[q.npc]||0)+8);   // finishing their project builds rapport
+  // quality grade: skill vs difficulty + relationship + luck
+  const score=S.skills[q.skill].lv - q.diff*2 + favor(q.npc)/25 + coopLevel()/40 + Math.random()*3;
+  const grade = score>6?"S": score>3?"A": score>0?"B":"C";
+  const g=GRADES[grade];
+  const cash=Math.floor(q.rewards.cash*cashMult()*fxMult("cash")*dailyMult("cash")*g.mult);
+  const exp =Math.floor(q.rewards.exp*xpMult()*fxMult("xp")*dailyMult("xp")*g.mult);
+  const rep =Math.floor(q.rewards.rep*g.mult);
+  S.cash += cash; S.rep += rep; S.tasksDone++;
+  if(grade==="S") S.sworks=(S.sworks||0)+1;
+  S.rel[q.npc]=Math.min(100,(S.rel[q.npc]||0)+8);
   gainSkill(q.skill, Math.floor(q.rewards.skill*xpMult()));
-  rivalsGain(q.rewards.rep*0.5);                     // rivals are also busy shipping
-  log(`✅ 完成 ${q.emoji}「${q.title}」→ 💰$${fmt(cash)} 🏆+${q.rewards.rep} ⭐+${exp}（好感+8）`,"g");
-  floatText("✅ 完成!", "#ffce54", 24); sfx("complete");
+  rivalsGain(q.rewards.rep*0.5);
+  log(`✅ 完成 ${q.emoji}「${q.title}」<b style="color:${g.col}">[${grade}級 ${g.stars}]</b> → 💰$${fmt(cash)} 🏆+${rep} ⭐+${exp}`,"g");
+  floatText(grade+" 級 完成!", g.col, 24); sfx("complete");
+  // item drop
+  if(Math.random()<0.24){ const keys=Object.keys(ITEMS); const k=keys[Math.floor(Math.random()*keys.length)]; addItem(k,1); log(`🎁 掉落道具：${ITEMS[k].em}${ITEMS[k].name}！（背包可用）`,"y"); }
   gainExp(exp);
   renderTask(); drawNpcs(); updateHUD(); checkAch(); save();
 }
@@ -1095,11 +1161,22 @@ function openShop(){
       <button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${afford?'':'opacity:.5'}" onclick="buySkill('${k}')">$${fmt(cost)}</button>
     </div>`;
   }).join("");
+  const itRows=Object.keys(ITEMS).map(k=>{
+    const it=ITEMS[k], afford=S.cash>=it.price;
+    return `<div class="achrow">
+      <div class="ae">${it.em}</div>
+      <div style="flex:1"><div class="an">${it.name} <span style="color:var(--dim)">（持有 ×${itemCount(k)}）</span></div>
+        <div class="ad">${it.desc}</div></div>
+      <button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${afford?'':'opacity:.5'}" onclick="buyItem('${k}')">$${fmt(it.price)}</button>
+    </div>`;
+  }).join("");
   $("modal").innerHTML=`<h2>🛒 設計工具行 <span style="font-size:13px;color:var(--gold)">💰 $${fmt(S.cash)}</span></h2>
     <div style="font-size:12px;color:var(--dim);margin:2px 0 8px">🧰 裝備（可無限升級，加成永久）</div>
     <div class="achlist">${eqRows}</div>
     <div style="font-size:12px;color:var(--dim);margin:14px 0 8px">📚 技能進修</div>
     <div class="achlist">${skRows}</div>
+    <div style="font-size:12px;color:var(--dim);margin:14px 0 8px">🎒 消耗道具</div>
+    <div class="achlist">${itRows}</div>
     <div class="modalBtns" style="margin-top:14px"><button class="btn" onclick="closeModal()">關閉</button></div>`;
   $("overlay").style.display="flex";
 }
@@ -1241,7 +1318,11 @@ function facReady(type){ return Date.now()>=((S.facCd&&S.facCd[type])||0); }
 function facCdLeft(type){ return Math.max(0, Math.ceil((((S.facCd&&S.facCd[type])||0)-Date.now())/1000)); }
 function setFacCd(type,ms){ if(!S.facCd) S.facCd={}; S.facCd[type]=Date.now()+ms; }
 function trophyRate(l){ return l*2; }
-function buffMult(){ return (S.buffUntil && Date.now()<S.buffUntil)? (S.buffAmt||1) : 1; }
+/* temporary effects (fx) + daily modifiers */
+function setFx(key,amt,sec){ if(!S.fx) S.fx={}; S.fx[key]={until:Date.now()+sec*1000, amt}; }
+function fxMult(key){ const f=S.fx&&S.fx[key]; return (f && Date.now()<f.until)? f.amt : 1; }
+function dailyMult(key){ return (S.daily && S.daily.fx && S.daily.fx[key]) || 1; }
+function buffMult(){ return fxMult("speed")*dailyMult("speed"); }
 function openFac(type){
   sfx("click");
   const f=FAC[type], lv=facLv(type), cost=facCost(type);
@@ -1281,7 +1362,7 @@ function useFac(type){
     sfx("complete"); log(`🖨️ 3D 列印打樣，專案進度 +${Math.round((0.12+lv*0.06)*100)}%`,"b");
     addProgress(add, true);
   } else if(type==="coffee"){
-    S.energy=maxEnergy(); S.buffUntil=Date.now()+(5+lv*3)*1000; S.buffAmt=1.5;
+    S.energy=maxEnergy(); setFx("speed",1.5,5+lv*3);
     setFacCd(type, FAC.coffee.cd);
     sfx("coffee"); log(`☕ 現煮咖啡！精力全滿，${5+lv*3} 秒內設計加速 ×1.5`,"y"); updateHUD();
   } else if(type==="projector"){
@@ -1298,16 +1379,110 @@ function useFac(type){
   if($("overlay").style.display==="flex") openFac(type);
 }
 
-/* passive facilities tick: idle income + trophy reputation */
+/* passive tick (1s): idle income + trophy reputation + day cycle */
 setInterval(()=>{
   if(!S || $("start").style.display!=="none") return;
-  let changed=false;
   const inc=idleRate(facLv("desk"));
-  if(inc>0){ S.cash+=inc; changed=true; }
+  if(inc>0) S.cash+=inc;
   const tr=trophyRate(facLv("trophy"))/10;
-  if(tr>0){ S.rep+=tr; changed=true; }
-  if(changed){ updateHUD(); }
+  if(tr>0) S.rep+=tr;
+  S.dayClock=(S.dayClock||0)+1;
+  if(S.dayClock>=DAY_SECONDS){ S.dayClock=0; newDay(); }
+  updateDayNight(); updateHUD();
 }, 1000);
+
+/* ========================================================================
+   day / night cycle
+   ===================================================================== */
+function rollDaily(){ S.daily = DAILY[Math.floor(Math.random()*DAILY.length)]; updateDayChip(); }
+function newDay(){
+  S.day=(S.day||1)+1;
+  const wage=Math.floor(salary()/30);
+  S.cash+=wage;
+  rollDaily();
+  log(`🌅 第 ${S.day} 天！領到日薪 +$${fmt(wage)}｜今日狀態：${S.daily.em}${S.daily.name}（${S.daily.desc}）`,"y");
+  toast(`🌅 Day ${S.day} · ${S.daily.em}${S.daily.name}`); sfx("level");
+  checkAch(); save();
+  if(Math.random()<0.5) setTimeout(triggerRandomEvent, 900);
+}
+function updateDayChip(){
+  $("dayTxt").textContent="Day "+(S.day||1);
+  $("dailyTxt").textContent=S.daily?(S.daily.em+S.daily.name):"";
+}
+function updateDayNight(){
+  const el=$("daynight"); if(!el) return;
+  const f=(S.dayClock||0)/DAY_SECONDS;         // 0=morning → 1=night
+  let col;
+  if(f<0.25)      col="rgba(255,214,170,0.10)";   // 晨
+  else if(f<0.55) col="rgba(255,255,255,0.0)";    // 午
+  else if(f<0.78) col="rgba(255,150,90,0.16)";    // 黃昏
+  else            col="rgba(40,60,130,0.34)";     // 夜
+  el.style.background=col;
+}
+
+/* ========================================================================
+   choice-based random events
+   ===================================================================== */
+function triggerRandomEvent(){
+  if(!S || $("overlay").style.display==="flex" || $("start").style.display!=="none") return;
+  openEvent(EVENTS[Math.floor(Math.random()*EVENTS.length)]);
+}
+function openEvent(e){
+  sfx("good");
+  const ei=EVENTS.indexOf(e);
+  const btns=e.choices.map((c,i)=>`<button class="btn ${i>0?'sec':''}" style="margin-top:8px" onclick="resolveEvent(${ei},${i})">${c.label}</button>`).join("");
+  $("modal").innerHTML=`<div class="who"><div class="face">${e.em}</div>
+    <div><div class="nm">${e.title}</div><div class="role">突發事件</div></div></div>
+    <div class="say">${e.text}</div>${btns}`;
+  $("overlay").style.display="flex";
+}
+function resolveEvent(ei,ci){
+  const e=EVENTS[ei], c=e.choices[ci];
+  const msg=c.out(S)||"";
+  closeModal();
+  if(msg){ log(`${e.em} ${msg}`,"pu"); toast(e.em+" "+e.title); }
+  updateHUD(); renderSkills(); drawNpcs(); checkAch(); save();
+}
+
+/* ========================================================================
+   consumable items + inventory
+   ===================================================================== */
+function addItem(k,n){ if(!S.items) S.items={}; S.items[k]=(S.items[k]||0)+(n||1); }
+function itemCount(k){ return (S.items&&S.items[k])||0; }
+function buyItem(k){
+  const it=ITEMS[k];
+  if(S.cash<it.price){ toast("💸 現金不足"); sfx("bad"); return; }
+  S.cash-=it.price; addItem(k,1); sfx("accept");
+  log(`🛍️ 購買 ${it.em}${it.name}`,"b"); updateHUD(); save(); openShop();
+}
+function useItem(k){
+  if(itemCount(k)<=0) return;
+  const it=ITEMS[k];
+  if(k==="energy"){ S.energy=Math.min(maxEnergy(),S.energy+50); }
+  else if(k==="overtime"){ if(!S.quest){ toast("目前沒有專案"); return; } S.quest.prog+=S.quest.goal*0.4; renderTaskBarOnly(); }
+  else if(k==="muse"){ setFx("xp",2,60); }
+  else if(k==="card"){ const ns=FLOOR.npcs; if(ns.length){ const n=ns[Math.floor(Math.random()*ns.length)]; S.rel[n.id]=Math.min(100,(S.rel[n.id]||0)+25); log(`💳 遞名片給 ${n.name}，好感 +25`,"p"); } }
+  S.items[k]--; sfx("good");
+  log(`🎒 使用 ${it.em}${it.name} — ${it.desc}`,"g");
+  updateHUD(); renderSkills(); checkAch(); save(); openBag();
+}
+function openBag(){
+  sfx("click");
+  const rows=Object.keys(ITEMS).map(k=>{
+    const it=ITEMS[k], c=itemCount(k);
+    return `<div class="achrow ${c>0?'':'locked'}">
+      <div class="ae">${it.em}</div>
+      <div style="flex:1"><div class="an">${it.name} <span style="color:var(--gold)">×${c}</span></div>
+        <div class="ad">${it.desc}</div></div>
+      <button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${c>0?'':'opacity:.4'}" onclick="useItem('${k}')">使用</button>
+    </div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>🎒 背包</h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:10px">完成專案有機率掉落道具，也可在 🛒 商店購買。</div>
+    <div class="achlist">${rows}</div>
+    <div class="modalBtns" style="margin-top:14px"><button class="btn" onclick="closeModal()">關閉</button></div>`;
+  $("overlay").style.display="flex";
+}
 
 /* ========================================================================
    HUD / skills / log
@@ -1378,8 +1553,10 @@ function load(){
     if(typeof S.restCdUntil!=="number") S.restCdUntil=0;
     if(typeof S.compCdUntil!=="number") S.compCdUntil=0;
     if(!S.fac) S.fac={}; if(!S.facCd) S.facCd={};
-    if(typeof S.buffUntil!=="number") S.buffUntil=0;
-    if(typeof S.buffAmt!=="number") S.buffAmt=1;
+    if(!S.fx) S.fx={}; if(!S.items) S.items={};
+    if(typeof S.day!=="number") S.day=1;
+    if(typeof S.dayClock!=="number") S.dayClock=0;
+    if(typeof S.sworks!=="number") S.sworks=0;
     if(S.energy>maxEnergy()) S.energy=maxEnergy();
     return true; } }catch(e){}
   return false;
@@ -1410,7 +1587,8 @@ function init(){
   px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
   buildLayers();
   reveal(S.px,S.py); drawFog();
-  renderSkills(); renderTask(); updateHUD(); updateAchChip();
+  if(!S.daily) rollDaily();
+  renderSkills(); renderTask(); updateHUD(); updateAchChip(); updateDayChip(); updateDayNight();
   $("floorTxt").textContent=FLOOR.name;
   $("soundIco").textContent=S.sound?"🔊":"🔇";
   fitViewport();
@@ -1424,6 +1602,8 @@ $("soundChip").addEventListener("click", ()=>{
 });
 $("achChip").addEventListener("click", openAch);
 $("shopChip").addEventListener("click", openShop);
+$("bagChip").addEventListener("click", openBag);
+$("dayChip").addEventListener("click", ()=>{ toast(S.daily?`${S.daily.em} ${S.daily.name}：${S.daily.desc}`:"新的一天"); });
 $("restChip").addEventListener("click", doRest);
 $("compChip").addEventListener("click", openComp);
 $("boardChip").addEventListener("click", openBoard);
