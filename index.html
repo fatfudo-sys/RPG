@@ -122,7 +122,8 @@
 
   /* ===== Start screen ===== */
   #start{position:fixed; inset:0; z-index:80; background:radial-gradient(900px 600px at 50% 20%, #1c2740, #0a0e14 70%);
-         display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px;}
+         display:flex; flex-direction:column; align-items:center; justify-content:safe center; text-align:center;
+         padding:24px; overflow-y:auto;}
   #start h1{font-size:34px; margin:0 0 4px; background:linear-gradient(90deg,#ffce54,#ff85c0,#5aa9ff);
             -webkit-background-clip:text; background-clip:text; color:transparent; font-weight:900;}
   #start .sub{color:var(--dim); font-size:14px; margin-bottom:18px;}
@@ -159,6 +160,8 @@
     <div class="chip" id="bagChip"><span>🎒</span><b>背包</b></div>
     <div class="chip" id="restChip"><span>😴</span><b>休息</b></div>
     <div class="chip" id="compChip"><span>🏁</span><b>競圖</b></div>
+    <div class="chip" id="worldChip"><span>✈️</span><b>巡迴</b></div>
+    <div class="chip" id="teamChip"><span>👥</span><b>團隊</b></div>
     <div class="chip" id="careerChip"><span>🏆</span><b>生涯</b></div>
     <div class="chip" id="boardChip"><span>📊</span><b>排行</b></div>
     <div class="chip" id="achChip"><span>🏅</span><b id="achTxt">0/12</b></div>
@@ -206,7 +209,9 @@
     🚶 在設計中心自由走動，探索地圖、認識同事。<br>
     💬 找 NPC 接下 <b>設計任務與需求</b>，完成它！<br>
     📈 完成任務 → 技能、聲望、等級成長。<br>
-    🛗 搭電梯挑戰 <b>無限樓層</b>：等級越高解鎖越高樓層，任務難度與回報也越高！<br>
+    🛗 搭電梯挑戰 <b>無限樓層</b>：等級越高解鎖越高樓層，難度與回報也越高！<br>
+    ✈️ <b>世界巡迴</b>：到東京、柏林、舊金山…海外分公司接案，回報倍率更高！<br>
+    👥 <b>招募團隊</b>幫你跑案子賺被動收入；🔁 把舊 <b>作品迭代成續作</b> 提升分紅。<br>
     🛒 用現金到商店買 <b>技能與裝備</b>；💬 和同事交流拉好感，專案更快。<br>
     🔧 地圖上的物件（工作站/列印機/咖啡機/投影機/獎盃）都能 <b>點擊使用並升級</b>。<br>
     📅 每天有不同 <b>狀態加成</b>、會發日薪、還有 <b>突發事件</b> 要你抉擇。<br>
@@ -468,12 +473,30 @@ function buildFloor2(){
 /* ========================================================================
    infinite floors — higher floors need higher level, harder & richer
    ===================================================================== */
+/* ---------- world tour: cities / overseas branches ---------- */
+const CITIES = [
+  {id:"tpe", flag:"🇹🇼", name:"台北總部",     short:"台北",     req:1,  bonus:1.0},
+  {id:"tyo", flag:"🇯🇵", name:"東京分公司",   short:"東京",     req:10, bonus:1.4},
+  {id:"ber", flag:"🇩🇪", name:"柏林分公司",   short:"柏林",     req:20, bonus:1.9},
+  {id:"sfo", flag:"🇺🇸", name:"舊金山分公司", short:"舊金山",   req:32, bonus:2.4},
+  {id:"mil", flag:"🇮🇹", name:"米蘭分公司",   short:"米蘭",     req:45, bonus:3.0},
+  {id:"sgp", flag:"🇸🇬", name:"新加坡分公司", short:"新加坡",   req:60, bonus:3.7},
+  {id:"dxb", flag:"🇦🇪", name:"杜拜分公司",   short:"杜拜",     req:80, bonus:4.6},
+];
+function cityById(id){ return CITIES.find(c=>c.id===id)||CITIES[0]; }
+function cityIndex(id){ return CITIES.findIndex(c=>c.id===id); }
+function cityBonus(id){ return cityById(id).bonus; }
+let curCity = "tpe";
+
 const floorCache = {};
-function getFloor(n){ if(!floorCache[n]) floorCache[n]=buildFloor(n); return floorCache[n]; }
-function buildFloor(n){ return n===1?buildFloor1() : n===2?buildFloor2() : buildFloorN(n); }
+function getFloor(city,n){ const k=city+":"+n; if(!floorCache[k]) floorCache[k]=buildFloor(city,n); return floorCache[k]; }
+function buildFloor(city,n){
+  if(city==="tpe"){ if(n===1) return buildFloor1(); if(n===2) return buildFloor2(); }
+  return buildFloorN(city,n);
+}
 function floorReqLevel(n){ return n<=1?1 : (n-1)*4; }         // 樓層解鎖等級
 function maxFloorUnlocked(){ let n=1; while(floorReqLevel(n+1)<=S.level) n++; return n; }
-function floorBonus(n){ return 1 + (n-1)*0.55; }             // 回報倍率
+function floorBonus(n){ return 1 + (n-1)*0.55; }             // 樓層回報倍率
 function floorDiffBonus(n){ return (n-1); }                  // 難度加成
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 
@@ -483,8 +506,9 @@ const NPC_FACES=["🧑‍🎨","👩‍💻","🧑‍🔧","🧑‍💼","🧑�
 const NPC_FIRST=["高","陳","林","王","李","張","Alex","Mia","Ken","Yuki","Hans","Luca","Sara","Omar"];
 const ROLE_TIER=["設計師","資深設計師","主任設計師","首席設計師","設計總監","傳奇設計顧問"];
 
-function buildFloorN(n){
-  const rng=mulberry32(n*99991+7);
+function buildFloorN(city,n){
+  const cIdx=Math.max(0,cityIndex(city));
+  const rng=mulberry32((cIdx+1)*1000003 + n*99991 + 7);
   const ri=(a,b)=>Math.floor(rng()*(b-a+1))+a;
   const blocked=makeGrid(), decor=[], walls=[], facs=[];
   const used=new Set(); used.add("18,9"); used.add("17,9");
@@ -509,18 +533,20 @@ function buildFloorN(n){
     const s=spot(); used.add(s.x+","+s.y);
     const spec=SKILL_KEYS[ri(0,SKILL_KEYS.length-1)];
     const nm=NPC_FIRST[ri(0,NPC_FIRST.length-1)]+ (rng()<0.4? "":["前輩","顧問","組長","大大",""][ri(0,4)]);
-    npcs.push({ id:`f${n}_npc${i}`, x:s.x, y:s.y, face:NPC_FACES[ri(0,NPC_FACES.length-1)],
+    npcs.push({ id:`${city}_f${n}_npc${i}`, x:s.x, y:s.y, face:NPC_FACES[ri(0,NPC_FACES.length-1)],
       name:nm, role:`${ROLE_TIER[tierIdx]}`, spec,
-      hi:["這層樓的案子可不簡單，敢接嗎？","高手才留得住，這個交給你。","樓層越高，挑戰越大，證明自己吧。"] });
+      hi:["這裡的案子可不簡單，敢接嗎？","高手才留得住，這個交給你。","越高的舞台，挑戰越大，證明自己吧。"] });
   }
   // a few zone labels at cluster spots
   const zones=[{x:18,y:9,name:"電梯"}];
   const zNames=["工作區","會客室","休息區","實驗區","展示區"];
   for(let i=0;i<3;i++){ const s=spot(); zones.push({x:s.x,y:s.y,name:zNames[i%zNames.length]}); }
   const elevator={x:18,y:9}; blocked[9][18]=true;
+  const c=cityById(city);
   const themeBase=FLOOR_THEMES[(n-1)%FLOOR_THEMES.length];
   const suffix = n>FLOOR_THEMES.length ? " ✦"+Math.ceil(n/FLOOR_THEMES.length) : "";
-  return { name:`${themeBase}${suffix} ${n}F`, blocked, decor, walls, elevator, facs,
+  const nm2 = city==="tpe" ? `${themeBase}${suffix} ${n}F` : `${c.flag}${c.short}·${themeBase}${suffix} ${n}F`;
+  return { name:nm2, blocked, decor, walls, elevator, facs,
     pantry:{x:coffeeP.x,y:coffeeP.y}, start:{x:17,y:9}, zones, npcs };
 }
 let curFloor = 1;
@@ -543,6 +569,10 @@ const ACH = [
   {id:"f2",     em:"🛗", name:"登上高樓",   desc:"抵達第 2 層樓",      chk:s=>(s.maxFloor||1)>=2},
   {id:"f5",     em:"🏙️", name:"高處風景",   desc:"抵達第 5 層樓",      chk:s=>(s.maxFloor||1)>=5},
   {id:"f10",    em:"🚀", name:"摩天設計師", desc:"抵達第 10 層樓",     chk:s=>(s.maxFloor||1)>=10},
+  {id:"overseas",em:"✈️", name:"海外拓展",  desc:"到海外分公司出差",    chk:s=>Object.keys(s.cities||{}).length>=2},
+  {id:"team1",  em:"👥", name:"不再單打",   desc:"雇用第一位設計師",    chk:s=>(s.team||[]).length>=1},
+  {id:"team5",  em:"🏢", name:"帶領團隊",   desc:"團隊達 5 人",         chk:s=>(s.team||[]).length>=5},
+  {id:"sequel", em:"🔁", name:"系列作",     desc:"作品迭代到第 3 代",   chk:s=>(s.works||[]).some(w=>(w.gen||1)>=3)},
   {id:"explore",em:"🗺️", name:"地圖探險家", desc:"探索 200 格地圖",    chk:s=>seenCount(s)>=200},
   {id:"gear",   em:"🧰", name:"工欲善其事", desc:"升級任一件裝備",     chk:s=>Object.values(s.equip||{}).some(v=>v>0)},
   {id:"bff",    em:"💞", name:"辦公室摯友", desc:"與同事好感達 100",   chk:s=>Object.values(s.rel||{}).some(v=>v>=100)},
@@ -568,8 +598,9 @@ function freshState(){
     level:1, exp:0, rep:0, cash:0, energy:100, tasksDone:0,
     skills:Object.fromEntries(SKILL_KEYS.map(k=>[k,{lv:1,xp:0}])),
     quest:null, npcQuestReady:{},
-    seen:{}, ver:3,
+    seen:{}, ver:4,
     px:3, py:14, floor:1, maxFloor:1,
+    city:"tpe", cityFloor:{}, cities:{tpe:true}, team:[],
     ach:{}, sound:true, visited2:false,
     equip:{tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0},
     rel:{}, rivals:initRivals(), compWins:0,
@@ -650,8 +681,9 @@ function buildLayers(){
   });
   drawFloor(); drawDecor(); drawLabels(); drawNpcs(); drawPlayer(); drawFog();
 }
-function tileVisible(x,y){ return !!(S.seen[curFloor] && S.seen[curFloor][x+","+y]); }
-function seenFloor(){ if(!S.seen[curFloor]) S.seen[curFloor]={}; return S.seen[curFloor]; }
+function seenKey(){ return curCity+":"+curFloor; }
+function tileVisible(x,y){ const s=S.seen[seenKey()]; return !!(s && s[x+","+y]); }
+function seenFloor(){ const k=seenKey(); if(!S.seen[k]) S.seen[k]={}; return S.seen[k]; }
 
 const ZONE_PAL = ["#5a4488","#2f5a6a","#3a6a4a","#6a5a2a","#6a3a4a","#3a4a7a","#5a3a6a","#2a6a5a","#6a4a2a","#4a5a2a"];
 function drawFloor(){
@@ -963,19 +995,21 @@ function openFloorSelect(){
   const rows=[];
   for(let n=1;n<=maxU+1;n++){
     const req=floorReqLevel(n), locked=n>maxU, cur=n===curFloor;
-    const f = locked ? null : getFloor(n);
+    const f = locked ? null : getFloor(curCity,n);
     const name = f ? f.name : `${FLOOR_THEMES[(n-1)%FLOOR_THEMES.length]} ${n}F`;
     rows.push(`<div class="achrow ${locked?'locked':''}" style="${cur?'border-color:#5aa9ff;background:#12203a':''}">
       <div class="ae">${locked?'🔒':(cur?'📍':'🛗')}</div>
       <div style="flex:1"><div class="an">${name} ${cur?'<span style="color:var(--blue)">(所在)</span>':''}</div>
-        <div class="ad">${locked?('需 Lv'+req+' 解鎖'):('回報 ×'+floorBonus(n).toFixed(2)+' · 難度 +'+floorDiffBonus(n))}</div></div>
+        <div class="ad">${locked?('需 Lv'+req+' 解鎖'):('回報 ×'+(floorBonus(n)*cityBonus(curCity)).toFixed(2)+' · 難度 +'+floorDiffBonus(n))}</div></div>
       ${locked?'':`<button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${cur?'opacity:.4':''}" ${cur?'disabled':''} onclick="switchFloor(${n})">前往</button>`}
     </div>`);
   }
-  $("modal").innerHTML=`<h2>🛗 電梯 · 樓層選擇</h2>
-    <div style="font-size:12px;color:var(--dim);margin-bottom:8px">樓層越高，任務難度與回報越高。等級提升可解鎖更高樓層（無上限）。目前 Lv${S.level}。</div>
+  $("modal").innerHTML=`<h2>🛗 ${cityById(curCity).flag} ${cityById(curCity).name} · 樓層</h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:8px">樓層越高，難度與回報越高（無上限）。目前 Lv${S.level}。</div>
     <div class="achlist">${rows.join("")}</div>
-    <div class="modalBtns" style="margin-top:12px"><button class="btn" onclick="closeModal()">關閉</button></div>`;
+    <div class="modalBtns" style="margin-top:12px">
+      <button class="btn" onclick="openWorld()">✈️ 前往其他城市</button>
+      <button class="btn sec" onclick="closeModal()">關閉</button></div>`;
   $("overlay").style.display="flex";
 }
 function switchFloor(to){
@@ -985,8 +1019,9 @@ function switchFloor(to){
   const wrap=$("stageWrap");
   wrap.style.opacity=0;
   setTimeout(()=>{
-    curFloor=to; FLOOR=getFloor(to); S.floor=to;
-    if(!S.seen[to]) S.seen[to]={};
+    curFloor=to; S.floor=to; if(!S.cityFloor) S.cityFloor={}; S.cityFloor[curCity]=to;
+    FLOOR=getFloor(curCity,to);
+    if(!S.seen[seenKey()]) S.seen[seenKey()]={};
     S.maxFloor=Math.max(S.maxFloor||1, to);
     if(to>=2) S.visited2=true;
     const open=nearestOpen(FLOOR.elevator.x,FLOOR.elevator.y) || FLOOR.start;
@@ -994,10 +1029,57 @@ function switchFloor(to){
     px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
     path=[]; pendingNpc=null; pendingElev=false; lastZone="";
     buildLayers(); reveal(S.px,S.py); drawFog();
-    $("floorTxt").textContent=FLOOR.name;
-    log("🛗 搭電梯來到「"+FLOOR.name+"」","b");
+    $("floorTxt").textContent=cityById(curCity).flag+" "+FLOOR.name;
+    log("🛗 來到「"+FLOOR.name+"」","b");
     checkAch(); save();
     wrap.style.opacity=1;
+  }, 280);
+}
+/* ---------- world tour / travel between cities ---------- */
+function travelCost(id){ return Math.floor(salary()*0.8*cityBonus(id)); }
+function openWorld(){
+  sfx("click");
+  const rows=CITIES.map(c=>{
+    const locked=S.level<c.req, cur=c.id===curCity;
+    const cost=travelCost(c.id);
+    return `<div class="achrow ${locked?'locked':''}" style="${cur?'border-color:#ffce54;background:#241f10':''}">
+      <div class="ae">${c.flag}</div>
+      <div style="flex:1"><div class="an">${c.name} ${cur?'<span style="color:var(--gold)">(目前)</span>':''}</div>
+        <div class="ad">${locked?('需 Lv'+c.req+' 解鎖'):('全域回報 ×'+c.bonus.toFixed(1)+(cur?'':' · 機票 $'+fmt(cost)))}</div></div>
+      ${(locked||cur)?'':`<button class="btn sec" style="width:auto;margin:0;padding:7px 10px" onclick="travelTo('${c.id}')">✈️ 出差</button>`}
+    </div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>✈️ 世界巡迴</h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:8px">到海外分公司接案，全域回報倍率更高、更有聲望！各城市有獨立樓層。</div>
+    <div class="achlist">${rows}</div>
+    <div class="modalBtns" style="margin-top:12px"><button class="btn sec" onclick="openFloorSelect()">← 樓層</button><button class="btn" onclick="closeModal()">關閉</button></div>`;
+  $("overlay").style.display="flex";
+}
+function travelTo(id){
+  const c=cityById(id);
+  if(S.level<c.req){ toast("等級不足"); sfx("bad"); return; }
+  if(id===curCity){ closeModal(); return; }
+  const cost=travelCost(id);
+  if(S.cash<cost){ toast("機票錢不夠 💸"); sfx("bad"); return; }
+  S.cash-=cost; closeModal(); sfx("elevator");
+  const wrap=$("stageWrap"); wrap.style.opacity=0;
+  setTimeout(()=>{
+    curCity=id; S.city=id;
+    curFloor=(S.cityFloor&&S.cityFloor[id])||1;
+    if(curFloor>maxFloorUnlocked()) curFloor=1;
+    if(!S.cityFloor) S.cityFloor={}; S.cityFloor[id]=curFloor;
+    S.floor=curFloor;
+    FLOOR=getFloor(curCity,curFloor);
+    if(!S.seen[seenKey()]) S.seen[seenKey()]={};
+    if(!S.cities) S.cities={}; S.cities[id]=true;
+    const open=nearestOpen(FLOOR.elevator.x,FLOOR.elevator.y)||FLOOR.start;
+    S.px=open.x; S.py=open.y; px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
+    path=[]; pendingNpc=null; pendingElev=false; lastZone="";
+    buildLayers(); reveal(S.px,S.py); drawFog();
+    $("floorTxt").textContent=c.flag+" "+FLOOR.name;
+    log(`✈️ 出差抵達 ${c.flag}${c.name}！全域回報 ×${c.bonus.toFixed(1)}`,"pu");
+    toast(`✈️ ${c.flag}${c.name}`);
+    checkAch(); save(); wrap.style.opacity=1;
   }, 280);
 }
 
@@ -1008,7 +1090,7 @@ function makeQuest(npc){
   const [pn,pe] = PRODUCTS[Math.floor(Math.random()*PRODUCTS.length)];
   const adj = ADJ[Math.floor(Math.random()*ADJ.length)];
   const client = CLIENTS[Math.floor(Math.random()*CLIENTS.length)];
-  const fb = floorBonus(curFloor);              // 樓層越高，回報越高
+  const fb = floorBonus(curFloor) * cityBonus(curCity);   // 樓層 × 城市回報
   const diff = 1 + Math.floor(Math.random()*3) + floorDiffBonus(curFloor);
   const goal = Math.floor((40 + diff*30) * (1+ (S.level-1)*0.12));
   const expR = Math.floor(expNeed(S.level)*(0.35+diff*0.22)*fb);
@@ -1189,7 +1271,7 @@ function makeRoyalty(grade, self){
   const gf={C:0.3,B:0.7,A:1.3,S:2.2}[grade]||0.5;
   return Math.floor(salary()/500 * gf * (self?1.8:1)) + 1;
 }
-function addWork(w){ if(!S.works) S.works=[]; S.works.unshift(w); if(S.works.length>30) S.works.pop(); }
+function addWork(w){ if(!S.works) S.works=[]; w.gen=w.gen||1; w.baseName=w.name; S.works.unshift(w); if(S.works.length>30) S.works.pop(); }
 function totalRoyalty(){ return (S.works||[]).reduce((a,w)=>a+w.royalty*(1+(w.awards?w.awards.length:0)*0.5),0); }
 
 /* ========================================================================
@@ -1467,6 +1549,19 @@ setInterval(()=>{
       sfx("bad"); drawNpcs();
     }
   }
+  // team members ship outsourced projects
+  if((S.team||[]).length && Math.random()<0.5){
+    const e=S.team[Math.floor(Math.random()*S.team.length)];
+    const bonus=empIncome(e)*6;
+    S.cash+=bonus; S.rep+=e.lv;
+    if(Math.random()<0.35){ const [pn,pe]=PRODUCTS[Math.floor(Math.random()*PRODUCTS.length)];
+      const gr = e.lv>=15?"A":e.lv>=6?"B":"C";
+      addWork({name:e.name+"的"+pn, emoji:pe, grade:gr, day:S.day||1, selfMade:false, royalty:makeRoyalty(gr,false), awards:[]});
+      log(`🧑‍💻 ${e.face}${e.name} 完成外包案「${pn}」(${gr}級)，入列作品集，+$${fmt(bonus)}`,"b");
+    } else {
+      log(`🧑‍💻 ${e.face}${e.name} 交付了一個案子，+$${fmt(bonus)}、聲望 +${e.lv}`,"b");
+    }
+  }
   checkAch(); save();
 }, 9000);
 
@@ -1552,6 +1647,8 @@ setInterval(()=>{
   if(inc>0) S.cash+=inc;
   const roy=totalRoyalty();          // 熱賣作品被動分紅
   if(roy>0) S.cash+=roy;
+  const ti=teamIncome();             // 團隊產值
+  if(ti>0) S.cash+=ti;
   const tr=trophyRate(facLv("trophy"))/10;
   if(tr>0) S.rep+=tr;
   S.dayClock=(S.dayClock||0)+1;
@@ -1697,14 +1794,80 @@ function openCareer(){
 }
 function openPortfolio(){
   sfx("click");
-  const rows=(S.works||[]).map(w=>`
-    <div class="achrow"><div class="ae">${w.emoji}</div>
-      <div style="flex:1"><div class="an">${w.name} ${w.selfMade?'🚀':''} <span style="color:${GRADES[w.grade].col}">${w.grade}級</span> ${(w.awards||[]).join("")}</div>
-      <div class="ad">Day ${w.day} · 分紅 $${fmt(w.royalty*(1+(w.awards?w.awards.length:0)*0.5))}/秒</div></div></div>`).join("") || `<div class="noquest">目前作品集是空的。</div>`;
+  const rows=(S.works||[]).map((w,i)=>{
+    const cost=iterateCost(w), afford=S.cash>=cost;
+    return `<div class="achrow"><div class="ae">${w.emoji}</div>
+      <div style="flex:1"><div class="an">${w.name} ${w.selfMade?'🚀':''} <span style="color:${GRADES[w.grade].col}">${w.grade}級</span> ${(w.gen||1)>1?'<span style="color:var(--purple)">Gen'+w.gen+'</span>':''} ${(w.awards||[]).join("")}</div>
+      <div class="ad">Day ${w.day} · 分紅 $${fmt(w.royalty*(1+(w.awards?w.awards.length:0)*0.5))}/秒</div></div>
+      <button class="btn sec" style="width:auto;margin:0;padding:6px 9px;font-size:12px;${afford?'':'opacity:.5'}" onclick="iterateWork(${i})">🔁 迭代<br>$${fmt(cost)}</button></div>`;
+  }).join("") || `<div class="noquest">目前作品集是空的。</div>`;
   $("modal").innerHTML=`<h2>🖼️ 作品集 <span style="font-size:13px;color:var(--dim)">(${(S.works||[]).length})</span></h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:8px">🔁 迭代：推出續作，提升作品評級與分紅（可反覆升級）。</div>
     <div class="achlist">${rows}</div>
     <div class="modalBtns" style="margin-top:12px"><button class="btn sec" onclick="openCareer()">← 返回</button><button class="btn" onclick="closeModal()">關閉</button></div>`;
   $("overlay").style.display="flex";
+}
+/* ---------- product iteration (把舊作品升級成續作) ---------- */
+function iterateCost(w){ return Math.floor(salary()*(0.6+gradeRank[w.grade]*0.5)*Math.pow(1.4,(w.gen||1)-1))+500; }
+function iterateWork(i){
+  const w=(S.works||[])[i]; if(!w) return;
+  const cost=iterateCost(w);
+  if(S.cash<cost){ toast("現金不足"); sfx("bad"); return; }
+  S.cash-=cost;
+  w.gen=(w.gen||1)+1;
+  if(gradeRank[w.grade]<3){ const order=["C","B","A","S"]; w.grade=order[gradeRank[w.grade]+1]; if(w.grade==="S") S.sworks=(S.sworks||0)+1; }
+  w.royalty=Math.floor(w.royalty*1.4)+1;
+  if(!w.baseName) w.baseName=w.name;
+  const roman=["","","II","III","IV","V","VI","VII","VIII","IX","X"][w.gen]||("Gen"+w.gen);
+  w.name=w.baseName+" "+roman;
+  sfx("level"); log(`🔁 推出續作 ${w.emoji}「${w.name}」→ ${w.grade}級，分紅提升！`,"g");
+  updateHUD(); checkAch(); save(); openPortfolio();
+}
+
+/* ========================================================================
+   team recruitment (雇用設計師幫你跑案子)
+   ===================================================================== */
+const TEAM_NAMES=["小美","阿宏","Ken","佳佳","大雄","Nina","阿哲","Momo","Leo","小婷","Ray","Yuki","阿翔","Coco"];
+const TEAM_FACES=["🧑‍🎓","👩‍🎓","🧑‍💻","👩‍💻","🧑‍🎨","👨‍🎨","🧑‍🔧"];
+function recruitCost(){ return Math.floor(6000*Math.pow(1.7,(S.team||[]).length)); }
+function empUpCost(e){ return Math.floor(2500*Math.pow(1.6,e.lv-1)); }
+function empIncome(e){ return Math.floor(salary()/240*e.lv*cityBonus(curCity)); }
+function teamIncome(){ return (S.team||[]).reduce((a,e)=>a+empIncome(e),0); }
+function openTeam(){
+  sfx("click");
+  const rc=recruitCost(), afford=S.cash>=rc;
+  const rows=(S.team||[]).map((e,i)=>{
+    const up=empUpCost(e), af=S.cash>=up;
+    return `<div class="achrow"><div class="ae">${e.face}</div>
+      <div style="flex:1"><div class="an">${e.name} <span style="color:var(--blue)">Lv${e.lv}</span> <span style="color:var(--dim)">${e.role}</span></div>
+      <div class="ad">產值 $${fmt(empIncome(e))}/秒</div></div>
+      <button class="btn sec" style="width:auto;margin:0;padding:6px 9px;font-size:12px;${af?'':'opacity:.5'}" onclick="upgradeEmp(${i})">培訓<br>$${fmt(up)}</button></div>`;
+  }).join("") || `<div class="noquest">還沒有團隊成員。<br>雇用設計師幫你跑案子、賺被動收入！</div>`;
+  $("modal").innerHTML=`<h2>👥 團隊 <span style="font-size:13px;color:var(--gold)">總產值 $${fmt(teamIncome())}/秒</span></h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:8px">團隊成員會持續產出收入，還會不時完成外包案。培訓可提升產值。</div>
+    <div class="achlist">${rows}</div>
+    <button class="btn" style="margin-top:10px;${afford?'':'opacity:.6'}" onclick="recruit()">➕ 招募新設計師 ($${fmt(rc)})</button>
+    <button class="btn sec" style="margin-top:8px" onclick="closeModal()">關閉</button>`;
+  $("overlay").style.display="flex";
+}
+function recruit(){
+  const cost=recruitCost();
+  if(S.cash<cost){ toast("現金不足"); sfx("bad"); return; }
+  S.cash-=cost; if(!S.team) S.team=[];
+  const nm=TEAM_NAMES[(S.team.length*3+ Math.floor(Math.random()*TEAM_NAMES.length))%TEAM_NAMES.length];
+  const face=TEAM_FACES[Math.floor(Math.random()*TEAM_FACES.length)];
+  S.team.push({name:nm, face, lv:1, role:"初級設計師"});
+  sfx("accept"); log(`👥 招募了 ${face}${nm}（初級設計師）加入團隊！`,"g");
+  updateHUD(); checkAch(); save(); openTeam();
+}
+function upgradeEmp(i){
+  const e=(S.team||[])[i]; if(!e) return;
+  const cost=empUpCost(e);
+  if(S.cash<cost){ toast("現金不足"); sfx("bad"); return; }
+  S.cash-=cost; e.lv++;
+  if(e.lv===5) e.role="設計師"; if(e.lv===10) e.role="資深設計師"; if(e.lv===20) e.role="主任設計師";
+  sfx("level"); log(`📈 培訓 ${e.face}${e.name} → Lv${e.lv}（${e.role}）`,"b");
+  updateHUD(); checkAch(); save(); openTeam();
 }
 function awardReady(id){ return (S.day||1) >= ((S.awardCd&&S.awardCd[id])||0); }
 function openAwards(){
@@ -1839,20 +2002,30 @@ const KEY="dc-survivor-v2";
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 function load(){
   try{ const raw=localStorage.getItem(KEY); if(raw){ const o=JSON.parse(raw);
-    const migrate = o.ver!==3;      // migrate 0-indexed floors → 1-indexed
+    const ov = o.ver||0;
     S=Object.assign(freshState(),o);
     for(const k of SKILL_KEYS) if(!S.skills[k]) S.skills[k]={lv:1,xp:0};
     if(!S.seen || typeof S.seen!=="object") S.seen={};
-    if(migrate){
+    if(ov<3){   // 0-indexed floors → 1-indexed (seen keys +1, floor +1)
       const s={}; for(const k in S.seen){ s[String(Number(k)+1)]=S.seen[k]; }
       S.seen=s;
       S.floor=(typeof o.floor==="number"?o.floor:0)+1;
       S.maxFloor=Math.max(S.maxFloor||1, S.floor);
-      S.ver=3;
+    }
+    if(ov<4){   // add city dimension: prefix seen keys with city, default 台北
+      const s={}; for(const k in S.seen){ s[k.includes(":")?k:("tpe:"+k)]=S.seen[k]; }
+      S.seen=s;
+      S.city="tpe"; if(!S.cityFloor) S.cityFloor={}; S.cityFloor.tpe=S.floor||1;
+      if(!S.cities) S.cities={tpe:true};
+      S.ver=4;
     }
     if(!S.ach) S.ach={};
     if(typeof S.floor!=="number") S.floor=1;
     if(typeof S.maxFloor!=="number") S.maxFloor=S.floor;
+    if(!S.city) S.city="tpe";
+    if(!S.cityFloor) S.cityFloor={};
+    if(!S.cities) S.cities={tpe:true};
+    if(!Array.isArray(S.team)) S.team=[];
     if(!S.equip) S.equip={tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0};
     if(!S.rel) S.rel={};
     if(!S.rivals || !S.rivals.length) S.rivals=initRivals();
@@ -1894,17 +2067,19 @@ window.addEventListener("resize", fitViewport);
    ===================================================================== */
 function init(){
   if(!load()) S=freshState();
-  curFloor=S.floor||1; FLOOR=getFloor(curFloor);
+  curCity=S.city||"tpe";
+  curFloor=(S.cityFloor&&S.cityFloor[curCity])||S.floor||1;
+  FLOOR=getFloor(curCity,curFloor);
   px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
   buildLayers();
   reveal(S.px,S.py); drawFog();
   if(!S.daily) rollDaily();
   renderSkills(); renderTask(); updateHUD(); updateAchChip(); updateDayChip(); updateDayNight();
-  $("floorTxt").textContent=FLOOR.name;
+  $("floorTxt").textContent=cityById(curCity).flag+" "+FLOOR.name;
   $("soundIco").textContent=S.sound?"🔊":"🔇";
   fitViewport();
   log("🌅 新的一天開始，歡迎來到設計中心！","b");
-  log("💡 找💬同事接任務，🛗 搭電梯探索二樓。","");
+  log("💡 找💬同事接任務，🛗 電梯挑戰高樓，✈️ 巡迴海外分公司。","");
   requestAnimationFrame(tick);
 }
 $("soundChip").addEventListener("click", ()=>{
@@ -1917,6 +2092,8 @@ $("bagChip").addEventListener("click", openBag);
 $("dayChip").addEventListener("click", ()=>{ toast(S.daily?`${S.daily.em} ${S.daily.name}：${S.daily.desc}`:"新的一天"); });
 $("restChip").addEventListener("click", doRest);
 $("compChip").addEventListener("click", openComp);
+$("worldChip").addEventListener("click", openWorld);
+$("teamChip").addEventListener("click", openTeam);
 $("careerChip").addEventListener("click", openCareer);
 $("boardChip").addEventListener("click", openBoard);
 $("goBtn").addEventListener("click", ()=>{
