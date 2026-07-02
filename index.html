@@ -29,7 +29,9 @@
   #repChip b{color:var(--pink);}
   #salChip b{color:var(--grn);}
   #floorChip b{color:var(--blue);}
-  #soundChip,#achChip{cursor:pointer;}
+  #soundChip,#achChip,#shopChip,#restChip,#compChip,#boardChip{cursor:pointer;}
+  #shopChip{background:linear-gradient(90deg,#2a2416,#3a3218); border-color:#6a5a28;}
+  #compChip{background:linear-gradient(90deg,#2a1622,#3a1830); border-color:#7a3a5a;}
   .bar{position:relative; width:120px; height:9px; border-radius:6px; background:#0c1016; overflow:hidden; border:1px solid var(--line);}
   .bar > i{position:absolute; left:0; top:0; bottom:0; border-radius:6px; transition:width .25s ease;}
   #expBar > i{background:linear-gradient(90deg,#5aa9ff,#b085ff);}
@@ -149,6 +151,10 @@
     <div class="chip" id="salChip"><span>💵</span><span><span class="lbl">月薪</span> <b id="salTxt">30,000</b></span></div>
     <div class="chip" id="cashChip"><span>💰</span><span><span class="lbl">現金</span> <b id="cashTxt">0</b></span></div>
     <div class="chip" id="floorChip"><span>🏢</span><b id="floorTxt">設計中心 1F</b></div>
+    <div class="chip" id="shopChip"><span>🛒</span><b>商店</b></div>
+    <div class="chip" id="restChip"><span>😴</span><b>休息</b></div>
+    <div class="chip" id="compChip"><span>🏁</span><b>競圖</b></div>
+    <div class="chip" id="boardChip"><span>📊</span><b>排行</b></div>
     <div class="chip" id="achChip"><span>🏅</span><b id="achTxt">0/12</b></div>
     <div class="chip" id="soundChip"><span id="soundIco">🔊</span></div>
   </div>
@@ -157,7 +163,7 @@
     <div id="stageWrap">
       <div id="zoneTag">你的座位</div>
       <svg id="stage" preserveAspectRatio="xMidYMid slice"></svg>
-      <div id="hint">🖱️ 點地圖走動 · 點 NPC💬 接任務 · 🛗 電梯換樓層 · WASD 也可</div>
+      <div id="hint">🖱️ 點地圖走動 · 點 NPC💬 接任務/交流 · 🛗 換樓層 · 🛒商店 🏁競圖 · WASD 也可</div>
     </div>
 
     <div id="side">
@@ -194,8 +200,10 @@
     💬 找 NPC 接下 <b>設計任務與需求</b>，完成它！<br>
     📈 完成任務 → 技能、聲望、等級成長。<br>
     🛗 搭電梯上 <b>研發展示大樓 2F</b>，接更高階的專案。<br>
+    🛒 用現金到商店買 <b>技能與裝備</b>；💬 和同事交流拉好感，專案更快。<br>
+    🏁 參加 <b>競圖大賽</b> 和對手一較高下，衝上 📊 排行榜第一！<br>
     🏅 解鎖成就、💼 職級與月薪 <b>無限升級</b>，爽爬到設計之神！<br>
-    ☕ 精力用完？去茶水間 / 頂樓花園回血。
+    ☕ 精力用完？去茶水間回血，或按 😴 休息小憩。
   </div>
   <button class="go" id="goBtn">開始上班 ▶</button>
 </div>
@@ -230,6 +238,24 @@ const PRODUCTS = [
 ];
 const ADJ = ["旗艦","極簡","模組化","永續環保","次世代","客製化","高階","入門","概念","限量"];
 const CLIENTS = ["國際大廠","新創團隊","日系客戶","歐洲品牌","電信商","車廠","運動品牌","醫療客戶","教育單位","遊戲公司"];
+
+/* ---------- shop: equipment (infinitely upgradable) ---------- */
+const EQUIP = {
+  tablet:  {em:"🖊️", name:"繪圖板",     desc:"衝刺設計威力", base:800,  grow:1.55},
+  station: {em:"💻", name:"高效工作站", desc:"自動設計速度", base:1200, grow:1.6},
+  software:{em:"🧰", name:"正版設計軟體", desc:"技能經驗獲得", base:1500, grow:1.6},
+  chair:   {em:"🪑", name:"人體工學椅", desc:"精力上限",     base:1000, grow:1.55},
+  coffee:  {em:"☕", name:"個人咖啡機", desc:"精力回復速度", base:900,  grow:1.5},
+  notebook:{em:"📓", name:"靈感筆記本", desc:"任務現金報酬", base:1100, grow:1.6},
+};
+/* ---------- rival designers ---------- */
+const RIVAL_DEFS = [
+  {id:"r_leo",  face:"🧑‍🦰", name:"Leo"},
+  {id:"r_nina", face:"👩‍🦱", name:"Nina"},
+  {id:"r_kai",  face:"🧔",   name:"阿凱"},
+  {id:"r_sofia",face:"👱‍♀️", name:"Sofia"},
+  {id:"r_jaden",face:"🧑‍🎤", name:"Jaden"},
+];
 
 /* ========================================================================
    floors  —  each floor is an independent map
@@ -364,6 +390,10 @@ const ACH = [
   {id:"skall",  em:"🎨", name:"全才設計師", desc:"所有技能達 Lv.5",    chk:s=>Object.values(s.skills).every(k=>k.lv>=5)},
   {id:"f2",     em:"🛗", name:"登上大樓",   desc:"搭電梯到二樓",       chk:s=>!!s.visited2},
   {id:"explore",em:"🗺️", name:"地圖探險家", desc:"探索 200 格地圖",    chk:s=>seenCount(s)>=200},
+  {id:"gear",   em:"🧰", name:"工欲善其事", desc:"升級任一件裝備",     chk:s=>Object.values(s.equip||{}).some(v=>v>0)},
+  {id:"bff",    em:"💞", name:"辦公室摯友", desc:"與同事好感達 100",   chk:s=>Object.values(s.rel||{}).some(v=>v>=100)},
+  {id:"champ",  em:"🏁", name:"競圖冠軍",   desc:"贏得一次競圖大賽",   chk:s=>(s.compWins||0)>=1},
+  {id:"top1",   em:"👑", name:"設計界之巔", desc:"聲望登上排行榜第一", chk:s=>s.rivals&&s.rivals.length&&s.rivals.every(r=>s.rep>=r.rep)},
 ];
 function seenCount(s){ return Object.values(s.seen||{}).reduce((a,o)=>a+Object.keys(o).length,0); }
 
@@ -379,8 +409,12 @@ function freshState(){
     seen:{0:{},1:{}},
     px:3, py:14, floor:0,
     ach:{}, sound:true, visited2:false,
+    equip:{tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0},
+    rel:{}, rivals:initRivals(), compWins:0,
+    restCdUntil:0, compCdUntil:0,
   };
 }
+function initRivals(){ return RIVAL_DEFS.map(r=>({id:r.id, face:r.face, name:r.name, rep:30+Math.floor(Math.random()*90)})); }
 function expNeed(lv){ return Math.floor(60 * Math.pow(1.28, lv-1)); }
 function skillXpNeed(lv){ return Math.floor(40 * Math.pow(1.35, lv-1)); }
 
@@ -675,7 +709,7 @@ function onEnterTile(){
   if(z && z.name!==lastZone){ lastZone=z.name; showZone(z.name); }
   const pantry=FLOOR.pantry;
   if(Math.abs(S.px-pantry.x)+Math.abs(S.py-pantry.y)<=1 && S.energy<100){
-    S.energy = 100; sfx("coffee");
+    S.energy = maxEnergy(); sfx("coffee");
     log(curFloor===0?"☕ 在茶水間喝了咖啡，精力全滿！":"🌳 在頂樓花園放鬆一下，精力全滿！","y"); updateHUD();
   }
   maybeEvent();
@@ -762,43 +796,51 @@ function makeQuest(npc){
   };
 }
 function openNpc(n){
-  const overlay=$("overlay"), modal=$("modal");
   sfx("click");
-  if(S.quest){
-    if(S.quest.npc===n.id){
-      modal.innerHTML = npcHeader(n) +
-        `<div class="say">「這個 ${S.quest.emoji} <b>${S.quest.title}</b> 你還在做呢，加油！」</div>
-         <div class="modalBtns"><button class="btn" onclick="closeModal()">回去工作 ✏️</button></div>`;
-    } else {
-      modal.innerHTML = npcHeader(n) +
-        `<div class="say">「你先把 ${S.quest.npcName} 的案子做完吧，一次一個專案比較實在。」</div>
-         <div class="modalBtns"><button class="btn sec" onclick="closeModal()">好的</button></div>`;
-    }
-    overlay.style.display="flex"; return;
+  let body = npcHeader(n) + relBlock(n.id);
+  if(S.quest && S.quest.npc===n.id){
+    body += `<div class="say">「${S.quest.emoji} <b>${S.quest.title}</b> 還在進行中，加油！」</div>`;
+  } else if(S.quest){
+    body += `<div class="say">「你先忙完 ${S.quest.npcName} 的案子吧，一次一個專案比較實在。」</div>`;
+  } else {
+    if(!S.npcQuestReady[n.id]) S.npcQuestReady[n.id]=makeQuest(n);
+    const q = S.npcQuestReady[n.id];
+    const hi = n.hi[Math.floor(Math.random()*n.hi.length)];
+    body += `<div class="say">「${hi}」</div>` + offerBlock(q) +
+      `<button class="btn" onclick="acceptQuest('${n.id}')">接下任務 ✅</button>`;
   }
-  if(!S.npcQuestReady[n.id]) S.npcQuestReady[n.id]=makeQuest(n);
-  const q = S.npcQuestReady[n.id];
-  const hi = n.hi[Math.floor(Math.random()*n.hi.length)];
-  modal.innerHTML = npcHeader(n) +
-    `<div class="say">「${hi}」</div>
-     <div class="offer">
-       <div class="row"><span>${q.emoji} 專案</span><span>${q.title}</span></div>
-       <div class="row"><span>客戶</span><span>${q.client}</span></div>
-       <div class="row"><span>難度</span><span>${"⭐".repeat(q.diff)}</span></div>
-       <div class="row"><span>主要技能</span><span>${SKILLS[q.skill].em} ${SKILLS[q.skill].name}</span></div>
-       <hr style="border-color:#2a3346;border-style:dashed;margin:8px 0">
-       <div class="row"><span>報酬</span><span style="color:var(--gold)">💰 $${fmt(q.rewards.cash)}</span></div>
-       <div class="row"><span></span><span style="color:var(--blue)">⭐ EXP ${q.rewards.exp} · 🏆 聲望 ${q.rewards.rep}</span></div>
-     </div>
-     <div class="modalBtns">
-       <button class="btn sec" onclick="closeModal()">再想想</button>
-       <button class="btn" onclick="acceptQuest('${n.id}')">接下任務 ✅</button>
-     </div>`;
-  overlay.style.display="flex";
+  body += `<div class="modalBtns" style="margin-top:10px">
+      <button class="btn sec" onclick="chatNpc('${n.id}')">💬 交流 (⚡4)</button>
+      <button class="btn sec" onclick="giftNpc('${n.id}')">🎁 送禮 ($${fmt(giftCost(n.id))})</button>
+    </div>
+    <button class="btn sec" style="margin-top:8px" onclick="closeModal()">關閉</button>`;
+  $("modal").innerHTML = body;
+  $("overlay").style.display="flex";
 }
 function npcHeader(n){
   return `<div class="who"><div class="face">${n.face}</div>
     <div><div class="nm">${n.name}</div><div class="role">${n.role}</div></div></div>`;
+}
+function relBlock(id){
+  const f=favor(id);
+  return `<div style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:3px">
+      <span>❤️ 好感度</span><span>${f}/100 ${f>=100?'💞 摯友':''}</span></div>
+    <div class="bar" style="height:10px"><i style="width:${f}%;background:linear-gradient(90deg,#ff85c0,#ff6b6b)"></i></div>
+    <div style="font-size:11px;color:var(--dim);margin-top:4px">好感越高，其專案進度越快（目前 +${Math.round(f/100*60)}%）</div>
+  </div>`;
+}
+function offerBlock(q){
+  const effCash=Math.floor(q.rewards.cash*cashMult()), effExp=Math.floor(q.rewards.exp*xpMult());
+  return `<div class="offer">
+     <div class="row"><span>${q.emoji} 專案</span><span>${q.title}</span></div>
+     <div class="row"><span>客戶</span><span>${q.client}</span></div>
+     <div class="row"><span>難度</span><span>${"⭐".repeat(q.diff)}</span></div>
+     <div class="row"><span>主要技能</span><span>${SKILLS[q.skill].em} ${SKILLS[q.skill].name}</span></div>
+     <hr style="border-color:#2a3346;border-style:dashed;margin:8px 0">
+     <div class="row"><span>報酬</span><span style="color:var(--gold)">💰 $${fmt(effCash)}</span></div>
+     <div class="row"><span></span><span style="color:var(--blue)">⭐ EXP ${effExp} · 🏆 聲望 ${q.rewards.rep}</span></div>
+   </div>`;
 }
 function closeModal(){ $("overlay").style.display="none"; }
 function acceptQuest(id){
@@ -822,7 +864,7 @@ function renderTask(){
     <div class="qt">${q.emoji} ${q.title}</div>
     <div class="qsub">${q.client} · ${"⭐".repeat(q.diff)} · 主技能 ${SKILLS[q.skill].em}${SKILLS[q.skill].name} Lv${sk.lv}</div>
     <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
-    <div class="qmeta"><span>進度 ${Math.floor(pct)}%</span><span>💰$${fmt(q.rewards.cash)} · ⭐${q.rewards.exp}</span></div>
+    <div class="qmeta"><span>進度 ${Math.floor(pct)}%</span><span>💰$${fmt(q.rewards.cash*cashMult())} · ⭐${Math.floor(q.rewards.exp*xpMult())}</span></div>
     <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力設計！ <span style="font-size:11px">(⚡6)</span></button>
     <div style="font-size:11px;color:var(--dim);text-align:center;margin-top:6px">技能越高，自動進度越快 · 也可按空白鍵</div>`;
   updateSprintBtn();
@@ -836,17 +878,18 @@ function sprint(){
   if(!S.quest || S.energy<6) return;
   S.energy-=6;
   const sk=S.skills[S.quest.skill];
-  const gain = 8*(1+sk.lv*0.12) + Math.random()*4;
+  const gain = (8*(1+sk.lv*0.12) + Math.random()*4)*sprintMult()*relSpeed(S.quest.npc)*coopMult();
   sfx("sprint");
   addProgress(gain, true);
   updateHUD();
 }
 setInterval(()=>{
+  if(!S) return;
   if(S.quest){
     const sk=S.skills[S.quest.skill];
-    addProgress(0.5*(1+sk.lv*0.14), false);
+    addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(S.quest.npc)*coopMult(), false);
   }
-  if(S.energy<100){ S.energy=Math.min(100, S.energy+0.6); updateHUD(); }
+  if(S.energy<maxEnergy()){ S.energy=Math.min(maxEnergy(), S.energy+energyRegen()); updateHUD(); }
 }, 240);
 
 function addProgress(amt, burst){
@@ -867,13 +910,17 @@ function renderTaskBarOnly(){
 }
 function completeQuest(){
   const q=S.quest; S.quest=null;
-  S.cash += q.rewards.cash;
+  const cash=Math.floor(q.rewards.cash*cashMult());
+  const exp =Math.floor(q.rewards.exp*xpMult());
+  S.cash += cash;
   S.rep  += q.rewards.rep;
   S.tasksDone++;
-  gainSkill(q.skill, q.rewards.skill);
-  log(`✅ 完成 ${q.emoji}「${q.title}」→ 💰$${fmt(q.rewards.cash)} 🏆+${q.rewards.rep} ⭐+${q.rewards.exp}`,"g");
+  S.rel[q.npc]=Math.min(100,(S.rel[q.npc]||0)+8);   // finishing their project builds rapport
+  gainSkill(q.skill, Math.floor(q.rewards.skill*xpMult()));
+  rivalsGain(q.rewards.rep*0.5);                     // rivals are also busy shipping
+  log(`✅ 完成 ${q.emoji}「${q.title}」→ 💰$${fmt(cash)} 🏆+${q.rewards.rep} ⭐+${exp}（好感+8）`,"g");
   floatText("✅ 完成!", "#ffce54", 24); sfx("complete");
-  gainExp(q.rewards.exp);
+  gainExp(exp);
   renderTask(); drawNpcs(); updateHUD(); checkAch(); save();
 }
 
@@ -939,6 +986,212 @@ function openAch(){
 }
 
 /* ========================================================================
+   bonuses (equipment + relationships)
+   ===================================================================== */
+function eqLv(k){ return (S.equip&&S.equip[k])||0; }
+function eqCost(k){ const e=EQUIP[k]; return Math.floor(e.base*Math.pow(e.grow, eqLv(k))); }
+function speedMult(){ return 1 + eqLv('station')*0.10; }
+function sprintMult(){ return 1 + eqLv('tablet')*0.14; }
+function xpMult(){ return 1 + eqLv('software')*0.12; }
+function cashMult(){ return 1 + eqLv('notebook')*0.14; }
+function maxEnergy(){ return 100 + eqLv('chair')*20; }
+function energyRegen(){ return 0.6 + eqLv('coffee')*0.30; }
+function favor(id){ return Math.min(100, (S.rel&&S.rel[id])||0); }
+function relSpeed(id){ return 1 + favor(id)/100*0.6; }
+function coopLevel(){ const v=Object.values(S.rel||{}); if(!v.length) return 0; return v.reduce((a,b)=>a+Math.min(100,b),0)/v.length; }
+function coopMult(){ return 1 + coopLevel()/100*0.3; }
+function findNpc(id){ for(const f of FLOORS){ const n=f.npcs.find(a=>a.id===id); if(n) return n; } return null; }
+
+/* ========================================================================
+   colleague interaction (chat / gift → 好感度 / 合作度)
+   ===================================================================== */
+function giftCost(id){ return Math.floor(300*(1+favor(id)/20)); }
+function chatNpc(id){
+  const n=findNpc(id); if(!n) return;
+  if(S.energy<4){ toast("😪 太累了"); sfx("bad"); log("😪 太累了，沒精神聊天，先休息吧。","r"); return; }
+  S.energy-=4;
+  const before=favor(id);
+  S.rel[id]=Math.min(100,(S.rel[id]||0)+7);
+  sfx("good");
+  log(`💬 和 ${n.name} 聊了聊，好感 +${favor(id)-before}（合作度 ${Math.round(coopLevel())}%）`,"p");
+  updateHUD(); checkAch(); save();
+  if($("overlay").style.display==="flex") openNpc(n);
+}
+function giftNpc(id){
+  const n=findNpc(id); if(!n) return;
+  const cost=giftCost(id);
+  if(S.cash<cost){ toast("💸 現金不足"); sfx("bad"); return; }
+  S.cash-=cost;
+  const before=favor(id);
+  S.rel[id]=Math.min(100,(S.rel[id]||0)+18);
+  sfx("accept");
+  log(`🎁 送禮給 ${n.name}（-$${fmt(cost)}），好感 +${favor(id)-before}`,"p");
+  updateHUD(); checkAch(); save();
+  if($("overlay").style.display==="flex") openNpc(n);
+}
+
+/* ========================================================================
+   shop (spend cash on skills & equipment)
+   ===================================================================== */
+function skillCost(k){ return Math.floor(500*Math.pow(1.5, S.skills[k].lv-1)); }
+function openShop(){
+  sfx("click");
+  const eqRows=Object.keys(EQUIP).map(k=>{
+    const e=EQUIP[k], cost=eqCost(k), afford=S.cash>=cost;
+    return `<div class="achrow">
+      <div class="ae">${e.em}</div>
+      <div style="flex:1"><div class="an">${e.name} <span style="color:var(--blue)">Lv${eqLv(k)}</span></div>
+        <div class="ad">提升「${e.desc}」</div></div>
+      <button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${afford?'':'opacity:.5'}" onclick="buyEquip('${k}')">$${fmt(cost)}</button>
+    </div>`;
+  }).join("");
+  const skRows=SKILL_KEYS.map(k=>{
+    const s=S.skills[k], cost=skillCost(k), afford=S.cash>=cost;
+    return `<div class="achrow">
+      <div class="ae">${SKILLS[k].em}</div>
+      <div style="flex:1"><div class="an">${SKILLS[k].name} <span style="color:var(--gold)">Lv${s.lv}</span></div>
+        <div class="ad">上進修課，技能直接 +1 級</div></div>
+      <button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${afford?'':'opacity:.5'}" onclick="buySkill('${k}')">$${fmt(cost)}</button>
+    </div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>🛒 設計工具行 <span style="font-size:13px;color:var(--gold)">💰 $${fmt(S.cash)}</span></h2>
+    <div style="font-size:12px;color:var(--dim);margin:2px 0 8px">🧰 裝備（可無限升級，加成永久）</div>
+    <div class="achlist">${eqRows}</div>
+    <div style="font-size:12px;color:var(--dim);margin:14px 0 8px">📚 技能進修</div>
+    <div class="achlist">${skRows}</div>
+    <div class="modalBtns" style="margin-top:14px"><button class="btn" onclick="closeModal()">關閉</button></div>`;
+  $("overlay").style.display="flex";
+}
+function buyEquip(k){
+  const cost=eqCost(k);
+  if(S.cash<cost){ toast("💸 現金不足"); sfx("bad"); return; }
+  S.cash-=cost; S.equip[k]=eqLv(k)+1;
+  sfx("accept"); log(`🧰 升級裝備 ${EQUIP[k].em}${EQUIP[k].name} → Lv${eqLv(k)}`,"g");
+  updateHUD(); renderSkills(); checkAch(); save(); openShop();
+}
+function buySkill(k){
+  const cost=skillCost(k);
+  if(S.cash<cost){ toast("💸 現金不足"); sfx("bad"); return; }
+  S.cash-=cost; const s=S.skills[k]; s.lv++; s.xp=0;
+  sfx("level"); log(`📚 進修 ${SKILLS[k].em}${SKILLS[k].name} → Lv${s.lv}`,"b");
+  renderSkills(); updateHUD(); checkAch(); save(); openShop();
+}
+
+/* ========================================================================
+   rest (self-serve energy refill, on cooldown)
+   ===================================================================== */
+function restReady(){ return Date.now()>=(S.restCdUntil||0); }
+function restCd(){ return Math.max(0, Math.ceil(((S.restCdUntil||0)-Date.now())/1000)); }
+function doRest(){
+  if(!restReady()){ toast(`😴 還在冷卻 ${restCd()}s`); return; }
+  S.energy=maxEnergy(); S.restCdUntil=Date.now()+20000;
+  sfx("coffee"); toast("😴 精神飽滿！"); log("😴 小憩片刻，精力全滿。","y"); updateHUD(); save();
+}
+
+/* ========================================================================
+   rivals + leaderboard
+   ===================================================================== */
+function rivalsGain(base){ if(!S.rivals) return; for(const r of S.rivals) r.rep += Math.max(1, Math.floor(base*(0.4+Math.random()*0.9))); }
+function openBoard(){
+  sfx("click");
+  const all=[{face:"🧑‍🎨",name:"你（"+rankName()+"）",rep:S.rep,me:true}, ...S.rivals.map(r=>({face:r.face,name:r.name,rep:r.rep}))];
+  all.sort((a,b)=>b.rep-a.rep);
+  const rows=all.map((e,i)=>{
+    const medal=["🥇","🥈","🥉"][i]||("#"+(i+1));
+    return `<div class="achrow" style="${e.me?'border-color:#5aa9ff;background:#12203a':''}">
+      <div class="ae">${medal}</div>
+      <div style="flex:1"><div class="an">${e.face} ${e.name}</div><div class="ad">🏆 聲望 ${fmt(e.rep)}</div></div>
+      ${e.me?'<div class="tick">👈</div>':''}</div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>📊 設計師排行榜</h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:10px">對手們也在接案、搶案、成長中。衝上第一名！</div>
+    <div class="achlist">${rows}</div>
+    <div class="modalBtns" style="margin-top:14px"><button class="btn" onclick="closeModal()">關閉</button></div>`;
+  $("overlay").style.display="flex";
+}
+
+/* ========================================================================
+   design competition (競圖)
+   ===================================================================== */
+function compFee(){ return Math.floor(salary()/10); }
+function compReady(){ return Date.now()>=(S.compCdUntil||0); }
+function compCd(){ return Math.max(0, Math.ceil(((S.compCdUntil||0)-Date.now())/1000)); }
+function openComp(){
+  sfx("click");
+  if(!compReady()){
+    $("modal").innerHTML=`<h2>🏁 競圖大賽</h2>
+      <div class="say">評審團還在休息，${compCd()} 秒後才能再次參賽。</div>
+      <div class="modalBtns"><button class="btn" onclick="closeModal()">關閉</button></div>`;
+    $("overlay").style.display="flex"; return;
+  }
+  const best=SKILL_KEYS.reduce((a,b)=>S.skills[b].lv>S.skills[a].lv?b:a);
+  $("modal").innerHTML=`<h2>🏁 競圖大賽</h2>
+    <div class="say">和其他設計師同場較勁！以你最強的 ${SKILLS[best].em}${SKILLS[best].name} (Lv${S.skills[best].lv}) 提案，裝備、聲望與合作度都會加分，評審打分決勝負。</div>
+    <div class="offer">
+      <div class="row"><span>入場費</span><span style="color:var(--gold)">💰 $${fmt(compFee())}</span></div>
+      <div class="row"><span>參賽者</span><span>你 + ${S.rivals.length} 位對手</span></div>
+      <div class="row"><span>冠軍獎勵</span><span>💰 大筆現金 · 🏆 聲望 · ⭐ 經驗</span></div>
+    </div>
+    <div class="modalBtns">
+      <button class="btn sec" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="runComp('${best}')">開始競圖 🎨</button>
+    </div>`;
+  $("overlay").style.display="flex";
+}
+function runComp(skill){
+  const fee=compFee();
+  if(S.cash<fee){ toast("💸 付不起入場費"); sfx("bad"); return; }
+  S.cash-=fee; S.compCdUntil=Date.now()+45000;
+  const eq=eqLv('tablet')+eqLv('station')+eqLv('software')+eqLv('notebook');
+  const myScore = S.skills[skill].lv*10 + eq*4 + S.rep*0.05 + coopLevel()*0.3 + Math.random()*40;
+  const field = S.rivals.map(r=>({face:r.face,name:r.name, score:r.rep*0.12 + 20 + Math.random()*70}));
+  field.push({face:"🧑‍🎨", name:"你", score:myScore, me:true});
+  field.sort((a,b)=>b.score-a.score);
+  const place = field.findIndex(e=>e.me)+1, N=field.length;
+  let cash=0,rep=0,exp=0,msg="";
+  if(place===1){ cash=Math.floor(salary()*1.2); rep=Math.floor(30+S.level*3); exp=Math.floor(expNeed(S.level)*0.9); msg="🏆 冠軍！一鳴驚人！"; S.compWins=(S.compWins||0)+1; }
+  else if(place<=Math.ceil(N/2)){ cash=Math.floor(salary()*0.4); rep=Math.floor(10+S.level); exp=Math.floor(expNeed(S.level)*0.4); msg="👍 入圍前段班，表現不錯！"; }
+  else { cash=Math.floor(fee*0.5); rep=3; exp=Math.floor(expNeed(S.level)*0.15); msg="😅 這次落敗，補助車馬費，下次再來！"; }
+  S.cash+=cash; S.rep+=rep;
+  for(const r of S.rivals) r.rep += 5+Math.floor(Math.random()*15);
+  sfx(place===1?"rank":"complete");
+  gainExp(exp);
+  const rows=field.map((e,i)=>{
+    const medal=["🥇","🥈","🥉"][i]||("#"+(i+1));
+    return `<div class="achrow" style="${e.me?'border-color:#ffce54;background:#241f10':''}">
+      <div class="ae">${medal}</div>
+      <div style="flex:1"><div class="an">${e.face} ${e.name}</div><div class="ad">得分 ${Math.round(e.score)}</div></div>
+      ${e.me?'<div class="tick">⭐</div>':''}</div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>🏁 競圖結果 · 第 ${place} 名</h2>
+    <div class="say">${msg}<br>獲得 💰$${fmt(cash)} · 🏆 聲望+${rep} · ⭐ EXP+${exp}</div>
+    <div class="achlist">${rows}</div>
+    <div class="modalBtns" style="margin-top:12px"><button class="btn" onclick="closeModal()">收下獎勵</button></div>`;
+  log(`🏁 競圖第 ${place} 名 → 💰$${fmt(cash)} 🏆+${rep} ⭐+${exp}`, place===1?"y":"b");
+  updateHUD(); checkAch(); save();
+  $("overlay").style.display="flex";
+}
+
+/* rivals live: grow over time & occasionally grab quests you haven't taken */
+setInterval(()=>{
+  if(!S || $("start").style.display!=="none") return;
+  rivalsGain(2 + S.level*0.3);
+  if(Math.random()<0.25){
+    const ids=Object.keys(S.npcQuestReady||{});
+    if(ids.length){
+      const gid=ids[Math.floor(Math.random()*ids.length)];
+      const q=S.npcQuestReady[gid]; delete S.npcQuestReady[gid];
+      const rv=S.rivals[Math.floor(Math.random()*S.rivals.length)];
+      rv.rep += 10+q.diff*8;
+      const n=findNpc(gid);
+      log(`🏃 對手 ${rv.face}${rv.name} 搶走了 ${n?n.name:'某人'} 的案子「${q.title}」！動作要快。`,"r");
+      sfx("bad"); drawNpcs();
+    }
+  }
+  checkAch(); save();
+}, 9000);
+
+/* ========================================================================
    HUD / skills / log
    ===================================================================== */
 function updateHUD(){
@@ -948,7 +1201,7 @@ function updateHUD(){
   $("salTxt").textContent=fmt(salary());
   $("cashTxt").textContent=fmt(S.cash);
   $("expBar").firstElementChild.style.width=(S.exp/expNeed(S.level)*100)+"%";
-  $("enBar").firstElementChild.style.width=S.energy+"%";
+  $("enBar").firstElementChild.style.width=(S.energy/maxEnergy()*100)+"%";
   updateSprintBtn();
 }
 function renderSkills(){
@@ -1000,6 +1253,13 @@ function load(){
     if(!S.seen[0]) S.seen[0]={}; if(!S.seen[1]) S.seen[1]={};
     if(!S.ach) S.ach={};
     if(typeof S.floor!=="number") S.floor=0;
+    if(!S.equip) S.equip={tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0};
+    if(!S.rel) S.rel={};
+    if(!S.rivals || !S.rivals.length) S.rivals=initRivals();
+    if(typeof S.compWins!=="number") S.compWins=0;
+    if(typeof S.restCdUntil!=="number") S.restCdUntil=0;
+    if(typeof S.compCdUntil!=="number") S.compCdUntil=0;
+    if(S.energy>maxEnergy()) S.energy=maxEnergy();
     return true; } }catch(e){}
   return false;
 }
@@ -1042,6 +1302,10 @@ $("soundChip").addEventListener("click", ()=>{
   if(S.sound) sfx("click"); save();
 });
 $("achChip").addEventListener("click", openAch);
+$("shopChip").addEventListener("click", openShop);
+$("restChip").addEventListener("click", doRest);
+$("compChip").addEventListener("click", openComp);
+$("boardChip").addEventListener("click", openBoard);
 $("goBtn").addEventListener("click", ()=>{
   initAudio(); if(S) S.sound=S.sound;
   $("start").style.display="none"; setTimeout(fitViewport,30);
