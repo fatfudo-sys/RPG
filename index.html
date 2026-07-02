@@ -159,6 +159,7 @@
     <div class="chip" id="bagChip"><span>🎒</span><b>背包</b></div>
     <div class="chip" id="restChip"><span>😴</span><b>休息</b></div>
     <div class="chip" id="compChip"><span>🏁</span><b>競圖</b></div>
+    <div class="chip" id="careerChip"><span>🏆</span><b>生涯</b></div>
     <div class="chip" id="boardChip"><span>📊</span><b>排行</b></div>
     <div class="chip" id="achChip"><span>🏅</span><b id="achTxt">0/12</b></div>
     <div class="chip" id="soundChip"><span id="soundIco">🔊</span></div>
@@ -210,6 +211,9 @@
     🔧 地圖上的物件（工作站/列印機/咖啡機/投影機/獎盃）都能 <b>點擊使用並升級</b>。<br>
     📅 每天有不同 <b>狀態加成</b>、會發日薪、還有 <b>突發事件</b> 要你抉擇。<br>
     🎒 完成專案有 <b>作品評級（S/A/B/C）</b> 與道具掉落，善用背包翻盤！<br>
+    🖼️ 作品累積成 <b>作品集</b>，熱賣作品持續 <b>被動分紅</b>💵。<br>
+    🌍 拿作品報名 <b>國際設計大賽</b>（紅點/iF/IDEA/G-Mark…），角逐 👑 <b>年度設計師</b>！<br>
+    🚀 到工作站 <b>自主研發</b>，一個人跑完研究→建模→打樣→上市所有階段！<br>
     🏁 參加 <b>競圖大賽</b> 和對手一較高下，衝上 📊 排行榜第一！<br>
     🏅 解鎖成就、💼 職級與月薪 <b>無限升級</b>，爽爬到設計之神！<br>
     ☕ 精力用完？去茶水間回血，或按 😴 休息小憩。
@@ -328,6 +332,25 @@ const ITEMS = {
   muse:    {em:"💡", name:"繆思靈感", desc:"60 秒 技能經驗 ×2",   price:1300},
   card:    {em:"💳", name:"高級名片", desc:"隨機同事好感 +25",    price:1100},
 };
+/* ---------- international design awards ---------- */
+const gradeRank = {C:0, B:1, A:2, S:3};
+const AWARDS = [
+  {id:"reddot",   badge:"🔴", name:"red dot Award",   country:"🇩🇪 德國",   minGrade:"B", prestige:1.0},
+  {id:"if",       badge:"🔷", name:"iF Design Award", country:"🇩🇪 德國",   minGrade:"B", prestige:1.1},
+  {id:"idea",     badge:"🟦", name:"IDEA",            country:"🇺🇸 美國",   minGrade:"A", prestige:1.3},
+  {id:"gmark",    badge:"🅶", name:"Good Design 大賞", country:"🇯🇵 日本",   minGrade:"B", prestige:1.0},
+  {id:"compasso", badge:"🧭", name:"Compasso d'Oro",  country:"🇮🇹 義大利", minGrade:"A", prestige:1.5},
+];
+const YEAR_DAYS = 12;   // 年度設計師選舉週期（每 12 天）
+/* ---------- self-developed product pipeline (獨立完成每個 STEP) ---------- */
+const DEV_STEPS = [
+  {name:"市場研究", skill:"ux",       em:"🔎"},
+  {name:"概念草圖", skill:"sketch",   em:"✏️"},
+  {name:"3D 建模",  skill:"cad",      em:"🖥️"},
+  {name:"外觀渲染", skill:"render",   em:"🎨"},
+  {name:"原型打樣", skill:"material", em:"🔬"},
+  {name:"提案上市", skill:"present",  em:"📊"},
+];
 
 /* ========================================================================
    floors  —  each floor is an independent map
@@ -470,6 +493,10 @@ const ACH = [
   {id:"sgrade", em:"🌟", name:"完美主義",   desc:"完成一件 S 級作品",  chk:s=>(s.sworks||0)>=1},
   {id:"day7",   em:"📅", name:"資深員工",   desc:"上班滿 7 天",        chk:s=>(s.day||1)>=7},
   {id:"collect",em:"🎒", name:"道具收藏家", desc:"同時持有 3 種道具",  chk:s=>Object.values(s.items||{}).filter(v=>v>0).length>=3},
+  {id:"award1", em:"🥇", name:"國際肯定",   desc:"贏得一座國際設計獎",  chk:s=>(s.awardsWon||0)>=1},
+  {id:"doy",    em:"👑", name:"年度設計師", desc:"當選年度設計師",      chk:s=>(s.doyWins||0)>=1},
+  {id:"selfdev",em:"🚀", name:"獨立開發者", desc:"完成一件自主研發產品",chk:s=>(s.works||[]).some(w=>w.selfMade)},
+  {id:"catalog",em:"🖼️", name:"高產設計師", desc:"作品集達 15 件",       chk:s=>(s.works||[]).length>=15},
 ];
 function seenCount(s){ return Object.values(s.seen||{}).reduce((a,o)=>a+Object.keys(o).length,0); }
 
@@ -490,6 +517,7 @@ function freshState(){
     restCdUntil:0, compCdUntil:0,
     fac:{}, facCd:{}, buffUntil:0, buffAmt:1,
     day:1, dayClock:0, daily:null, fx:{}, items:{}, sworks:0,
+    works:[], awardsWon:0, doyWins:0, awardCd:{},
   };
 }
 function initRivals(){ return RIVAL_DEFS.map(r=>({id:r.id, face:r.face, name:r.name, rep:30+Math.floor(Math.random()*90)})); }
@@ -564,6 +592,7 @@ function buildLayers(){
 }
 function tileVisible(x,y){ return !!(S.seen[curFloor] && S.seen[curFloor][x+","+y]); }
 
+const ZONE_PAL = ["#5a4488","#2f5a6a","#3a6a4a","#6a5a2a","#6a3a4a","#3a4a7a","#5a3a6a","#2a6a5a","#6a4a2a","#4a5a2a"];
 function drawFloor(){
   const {blocked,decor,walls}=FLOOR;
   let html="";
@@ -571,10 +600,20 @@ function drawFloor(){
     const isDecor = decor.some(d=>d.x===x&&d.y===y);
     const wall = blocked[y][x] && !isDecor &&
                  (x===0||y===0||x===COLS-1||y===ROWS-1||walls.some(w=>w.x===x&&w.y===y));
-    const fill = wall ? "#20283a" : ((x+y)%2? "#12171f":"#141a24");
-    html += `<rect x="${x*T}" y="${y*T}" width="${T}" height="${T}" fill="${fill}" stroke="#0c1016" stroke-width="1"/>`;
-    if(wall) html += `<rect x="${x*T+3}" y="${y*T+3}" width="${T-6}" height="${T-6}" fill="none" stroke="#2f3b52" stroke-width="1.5" rx="4"/>`;
+    const fill = wall ? "#222c40" : ((x+y)%2? "#11151d":"#141926");
+    html += `<rect x="${x*T}" y="${y*T}" width="${T}" height="${T}" fill="${fill}"/>`;
+    if(wall) html += `<rect x="${x*T+2.5}" y="${y*T+2.5}" width="${T-5}" height="${T-5}" fill="none" stroke="#38466040" stroke-width="1.5" rx="5"/>`;
+    else html += `<circle cx="${x*T+T/2}" cy="${y*T+T/2}" r="1.1" fill="#ffffff10"/>`;
   }
+  // zone carpets (colored rugs for readability)
+  FLOOR.zones.forEach((z,i)=>{
+    if(z.name==="電梯") return;
+    const col=ZONE_PAL[i%ZONE_PAL.length];
+    const w=z.w||6, h=z.h||4;
+    const x=Math.max(1,z.x-Math.floor(w/2)), y=Math.max(1,z.y-Math.floor(h/2));
+    const ww=Math.min(COLS-1-x,w), hh=Math.min(ROWS-1-y,h);
+    html += `<rect x="${x*T+3}" y="${y*T+3}" width="${ww*T-6}" height="${hh*T-6}" rx="12" fill="${col}" opacity="0.15" stroke="${col}" stroke-opacity="0.35" stroke-width="1.5"/>`;
+  });
   layers.floor.innerHTML = html;
 }
 function emojiText(x,y,em,size){
@@ -582,9 +621,13 @@ function emojiText(x,y,em,size){
 }
 function drawDecor(){ layers.decor.innerHTML = FLOOR.decor.map(d=>emojiText(d.x,d.y,d.em,d.size)).join(""); }
 function drawLabels(){
-  layers.label.innerHTML = FLOOR.zones.map(z=>
-    `<text x="${z.x*T+T/2}" y="${z.y*T-T*0.7}" font-size="12" fill="#4a5a78" text-anchor="middle" font-weight="700" letter-spacing="1">${z.name}</text>`
-  ).join("");
+  layers.label.innerHTML = FLOOR.zones.map(z=>{
+    const w=z.name.length*13+18, cx=z.x*T+T/2;
+    return `<g>
+      <rect x="${cx-w/2}" y="${z.y*T-T*0.95}" width="${w}" height="21" rx="10" fill="#0b0f16" opacity="0.72" stroke="#33405a" stroke-width="1"/>
+      <text x="${cx}" y="${z.y*T-T*0.62}" font-size="12" fill="#aebbd0" text-anchor="middle" font-weight="700" letter-spacing="1">${z.name}</text>
+    </g>`;
+  }).join("");
 }
 function drawNpcs(){
   // NPCs
@@ -959,14 +1002,27 @@ function renderTask(){
   }
   $("taskCount").textContent="";
   const pct=Math.min(100, q.prog/q.goal*100);
-  const sk=S.skills[q.skill];
-  body.innerHTML=`
-    <div class="qt">${q.emoji} ${q.title}</div>
-    <div class="qsub">${q.client} · ${"⭐".repeat(q.diff)} · 主技能 ${SKILLS[q.skill].em}${SKILLS[q.skill].name} Lv${sk.lv}</div>
-    <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
-    <div class="qmeta"><span>進度 ${Math.floor(pct)}%</span><span>💰$${fmt(q.rewards.cash*cashMult())} · ⭐${Math.floor(q.rewards.exp*xpMult())}</span></div>
-    <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力設計！ <span style="font-size:11px">(⚡6)</span></button>
-    <div style="font-size:11px;color:var(--dim);text-align:center;margin-top:6px">技能越高，自動進度越快 · 也可按空白鍵</div>`;
+  if(q.selfMade){
+    const st=q.steps[q.step], sk=S.skills[st.skill];
+    const dots=q.steps.map((s,i)=>`<span style="opacity:${i<q.step?1:i===q.step?1:0.3};font-size:15px">${i<q.step?'✅':s.em}</span>`).join(" ");
+    body.innerHTML=`
+      <div class="qt">🚀 ${q.emoji} ${q.title} <span style="font-size:11px;color:var(--purple)">自主研發</span></div>
+      <div class="qsub">STEP ${q.step+1}/${q.steps.length} · ${st.em} ${st.name} · ${SKILLS[st.skill].em}${SKILLS[st.skill].name} Lv${sk.lv}</div>
+      <div style="margin:4px 0 6px">${dots}</div>
+      <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
+      <div class="qmeta"><span>本階段 ${Math.floor(pct)}%</span><span>完成 💰$${fmt(q.rewards.cash*cashMult())} · 100% 分紅</span></div>
+      <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力研發！ <span style="font-size:11px">(⚡6)</span></button>
+      <div style="font-size:11px;color:var(--dim);text-align:center;margin-top:6px">獨力完成每個階段，成品全歸你，分紅更高！</div>`;
+  } else {
+    const sk=S.skills[q.skill];
+    body.innerHTML=`
+      <div class="qt">${q.emoji} ${q.title}</div>
+      <div class="qsub">${q.client} · ${"⭐".repeat(q.diff)} · 主技能 ${SKILLS[q.skill].em}${SKILLS[q.skill].name} Lv${sk.lv}</div>
+      <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
+      <div class="qmeta"><span>進度 ${Math.floor(pct)}%</span><span>💰$${fmt(q.rewards.cash*cashMult())} · ⭐${Math.floor(q.rewards.exp*xpMult())}</span></div>
+      <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力設計！ <span style="font-size:11px">(⚡6)</span></button>
+      <div style="font-size:11px;color:var(--dim);text-align:center;margin-top:6px">技能越高，自動進度越快 · 也可按空白鍵</div>`;
+  }
   updateSprintBtn();
 }
 function updateSprintBtn(){
@@ -974,10 +1030,11 @@ function updateSprintBtn(){
   b.disabled = S.energy<6;
   b.style.opacity = S.energy<6?0.6:1;
 }
+function curSkill(q){ return q.selfMade ? q.steps[q.step].skill : q.skill; }
 function sprint(){
   if(!S.quest || S.energy<6) return;
   S.energy-=6;
-  const sk=S.skills[S.quest.skill];
+  const sk=S.skills[curSkill(S.quest)];
   const gain = (8*(1+sk.lv*0.12) + Math.random()*4)*sprintMult()*relSpeed(S.quest.npc)*coopMult()*buffMult();
   sfx("sprint");
   addProgress(gain, true);
@@ -986,7 +1043,7 @@ function sprint(){
 setInterval(()=>{
   if(!S) return;
   if(S.quest){
-    const sk=S.skills[S.quest.skill];
+    const sk=S.skills[curSkill(S.quest)];
     addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(S.quest.npc)*coopMult()*buffMult(), false);
   }
   if(S.energy<maxEnergy()){ S.energy=Math.min(maxEnergy(), S.energy+energyRegen()*dailyMult("regen")*fxMult("regen")); updateHUD(); }
@@ -996,8 +1053,17 @@ function addProgress(amt, burst){
   const q=S.quest; if(!q) return;
   q.prog+=amt;
   if(burst) floatText("+"+Math.floor(amt), "#5cd6a0");
-  if(q.prog>=q.goal){ completeQuest(); }
-  else renderTaskBarOnly();
+  if(q.prog>=q.goal){
+    if(q.selfMade && q.step < q.steps.length-1){
+      const done=q.steps[q.step];
+      gainSkill(done.skill, Math.floor(skillXpNeed(S.skills[done.skill].lv)*0.4));
+      q.step++; q.prog=0;
+      const nx=q.steps[q.step];
+      log(`✅ 階段完成 ${done.em}${done.name} → 進入 ${nx.em}${nx.name}（STEP ${q.step+1}/${q.steps.length}）`,"b");
+      sfx("good"); floatText("STEP ✔", "#5cd6a0", 20);
+      renderTask();
+    } else { completeQuest(); }
+  } else renderTaskBarOnly();
   save();
 }
 function renderTaskBarOnly(){
@@ -1011,25 +1077,36 @@ function renderTaskBarOnly(){
 const GRADES={S:{mult:1.7,stars:"⭐⭐⭐",col:"#ffce54"},A:{mult:1.35,stars:"⭐⭐",col:"#5cd6a0"},B:{mult:1.1,stars:"⭐",col:"#5aa9ff"},C:{mult:0.9,stars:"—",col:"#8b96a8"}};
 function completeQuest(){
   const q=S.quest; S.quest=null;
-  // quality grade: skill vs difficulty + relationship + luck
-  const score=S.skills[q.skill].lv - q.diff*2 + favor(q.npc)/25 + coopLevel()/40 + Math.random()*3;
+  const self=!!q.selfMade;
+  const gradeSkillLv = self ? Math.round(q.steps.reduce((a,s)=>a+S.skills[s.skill].lv,0)/q.steps.length) : S.skills[q.skill].lv;
+  const score = gradeSkillLv - q.diff*2 + favor(q.npc)/25 + coopLevel()/40 + (self?2:0) + Math.random()*3;
   const grade = score>6?"S": score>3?"A": score>0?"B":"C";
   const g=GRADES[grade];
-  const cash=Math.floor(q.rewards.cash*cashMult()*fxMult("cash")*dailyMult("cash")*g.mult);
+  const selfBonus = self?1.6:1;
+  const cash=Math.floor(q.rewards.cash*cashMult()*fxMult("cash")*dailyMult("cash")*g.mult*selfBonus);
   const exp =Math.floor(q.rewards.exp*xpMult()*fxMult("xp")*dailyMult("xp")*g.mult);
-  const rep =Math.floor(q.rewards.rep*g.mult);
+  const rep =Math.floor(q.rewards.rep*g.mult*selfBonus);
   S.cash += cash; S.rep += rep; S.tasksDone++;
   if(grade==="S") S.sworks=(S.sworks||0)+1;
-  S.rel[q.npc]=Math.min(100,(S.rel[q.npc]||0)+8);
-  gainSkill(q.skill, Math.floor(q.rewards.skill*xpMult()));
+  if(q.npc){ S.rel[q.npc]=Math.min(100,(S.rel[q.npc]||0)+8); }
+  if(q.skill) gainSkill(q.skill, Math.floor(q.rewards.skill*xpMult()));
   rivalsGain(q.rewards.rep*0.5);
-  log(`✅ 完成 ${q.emoji}「${q.title}」<b style="color:${g.col}">[${grade}級 ${g.stars}]</b> → 💰$${fmt(cash)} 🏆+${rep} ⭐+${exp}`,"g");
-  floatText(grade+" 級 完成!", g.col, 24); sfx("complete");
-  // item drop
+  // add to portfolio (熱賣分紅來源)
+  addWork({name:q.title, emoji:q.emoji, grade, day:S.day||1, selfMade:self,
+           royalty:makeRoyalty(grade,self), awards:[]});
+  const tag = self?'<b style="color:var(--purple)">[自主研發]</b> ':'';
+  log(`✅ 完成 ${tag}${q.emoji}「${q.title}」<b style="color:${g.col}">[${grade}級 ${g.stars}]</b> → 💰$${fmt(cash)} 🏆+${rep} ⭐+${exp}`,"g");
+  floatText(grade+" 級 完成!", g.col, 24); sfx(self?"rank":"complete");
   if(Math.random()<0.24){ const keys=Object.keys(ITEMS); const k=keys[Math.floor(Math.random()*keys.length)]; addItem(k,1); log(`🎁 掉落道具：${ITEMS[k].em}${ITEMS[k].name}！（背包可用）`,"y"); }
   gainExp(exp);
   renderTask(); drawNpcs(); updateHUD(); checkAch(); save();
 }
+function makeRoyalty(grade, self){
+  const gf={C:0.3,B:0.7,A:1.3,S:2.2}[grade]||0.5;
+  return Math.floor(salary()/500 * gf * (self?1.8:1)) + 1;
+}
+function addWork(w){ if(!S.works) S.works=[]; S.works.unshift(w); if(S.works.length>30) S.works.pop(); }
+function totalRoyalty(){ return (S.works||[]).reduce((a,w)=>a+w.royalty*(1+(w.awards?w.awards.length:0)*0.5),0); }
 
 /* ========================================================================
    progression
@@ -1333,6 +1410,11 @@ function openFac(type){
   } else {
     action=`<div class="say">被動設施 — 升級即自動生效，全天候運作中。</div>`;
   }
+  if(type==="desk"){
+    action += S.quest
+      ? `<div style="font-size:12px;color:var(--dim);text-align:center;margin-top:8px">（完成目前專案後可自主研發新產品）</div>`
+      : `<button class="btn" style="margin-top:8px;background:linear-gradient(90deg,#b085ff,#5aa9ff)" onclick="startSelfDev()">🚀 自主研發新產品</button>`;
+  }
   $("modal").innerHTML=`<div class="who"><div class="face">${f.em}</div>
       <div><div class="nm">${f.name} <span style="color:var(--blue)">Lv${lv}</span></div>
       <div class="role">設計中心設施 · 可升級</div></div></div>
@@ -1384,6 +1466,8 @@ setInterval(()=>{
   if(!S || $("start").style.display!=="none") return;
   const inc=idleRate(facLv("desk"));
   if(inc>0) S.cash+=inc;
+  const roy=totalRoyalty();          // 熱賣作品被動分紅
+  if(roy>0) S.cash+=roy;
   const tr=trophyRate(facLv("trophy"))/10;
   if(tr>0) S.rep+=tr;
   S.dayClock=(S.dayClock||0)+1;
@@ -1403,7 +1487,8 @@ function newDay(){
   log(`🌅 第 ${S.day} 天！領到日薪 +$${fmt(wage)}｜今日狀態：${S.daily.em}${S.daily.name}（${S.daily.desc}）`,"y");
   toast(`🌅 Day ${S.day} · ${S.daily.em}${S.daily.name}`); sfx("level");
   checkAch(); save();
-  if(Math.random()<0.5) setTimeout(triggerRandomEvent, 900);
+  if(S.day % YEAR_DAYS === 0){ setTimeout(designerOfYear, 1200); }
+  else if(Math.random()<0.5){ setTimeout(triggerRandomEvent, 900); }
 }
 function updateDayChip(){
   $("dayTxt").textContent="Day "+(S.day||1);
@@ -1485,6 +1570,136 @@ function openBag(){
 }
 
 /* ========================================================================
+   self-developed product (獨立完成每個 STEP)
+   ===================================================================== */
+function startSelfDev(){
+  if(S.quest){ toast("先完成目前專案"); sfx("bad"); return; }
+  const [pn,pe]=PRODUCTS[Math.floor(Math.random()*PRODUCTS.length)];
+  const adj=ADJ[Math.floor(Math.random()*ADJ.length)];
+  const goalPer=Math.floor(55*(1+(S.level-1)*0.12));
+  S.quest={ selfMade:true, step:0, steps:DEV_STEPS, title:adj+pn, emoji:pe, client:"自主研發",
+    diff:3, goal:goalPer, prog:0, npc:null, npcName:"自主研發",
+    rewards:{ cash:Math.floor(salary()/7), exp:Math.floor(expNeed(S.level)*1.3), rep:Math.floor(28+S.level*2), skill:0 } };
+  closeModal(); renderTask(); sfx("accept");
+  log(`🚀 啟動自主研發「${adj}${pn}」！需獨力完成 ${DEV_STEPS.length} 個階段，成品 100% 歸你。`,"pu"); save();
+}
+
+/* ========================================================================
+   career hub · portfolio · international awards · designer of the year
+   ===================================================================== */
+function skillsAvg(){ return SKILL_KEYS.reduce((a,k)=>a+S.skills[k].lv,0)/SKILL_KEYS.length; }
+function openCareer(){
+  sfx("click");
+  const roy=totalRoyalty();
+  const recent=(S.works||[]).slice(0,5).map(w=>`
+    <div class="achrow"><div class="ae">${w.emoji}</div>
+      <div style="flex:1"><div class="an">${w.name} ${w.selfMade?'🚀':''} <span style="color:${GRADES[w.grade].col}">${w.grade}</span> ${(w.awards||[]).join("")}</div>
+      <div class="ad">分紅 $${fmt(w.royalty*(1+(w.awards?w.awards.length:0)*0.5))}/秒</div></div></div>`).join("") || `<div class="noquest">還沒有作品，快去完成專案！</div>`;
+  $("modal").innerHTML=`<h2>🏆 設計生涯</h2>
+    <div class="offer">
+      <div class="row"><span>🖼️ 作品總數</span><span>${(S.works||[]).length}（🌟S級 ${S.sworks||0}）</span></div>
+      <div class="row"><span>🥇 國際獲獎</span><span>${S.awardsWon||0} 座</span></div>
+      <div class="row"><span>👑 年度設計師</span><span>${S.doyWins||0} 次</span></div>
+      <div class="row"><span>💵 作品分紅</span><span style="color:var(--gold)">$${fmt(roy)}/秒</span></div>
+    </div>
+    <div style="font-size:12px;color:var(--dim);margin:4px 0 6px">最新作品</div>
+    <div class="achlist">${recent}</div>
+    <div class="modalBtns" style="margin-top:12px">
+      <button class="btn" onclick="openAwards()">🌍 報名國際大賽</button>
+      <button class="btn sec" onclick="openPortfolio()">🖼️ 完整作品集</button>
+    </div>
+    <button class="btn sec" style="margin-top:8px" onclick="closeModal()">關閉</button>`;
+  $("overlay").style.display="flex";
+}
+function openPortfolio(){
+  sfx("click");
+  const rows=(S.works||[]).map(w=>`
+    <div class="achrow"><div class="ae">${w.emoji}</div>
+      <div style="flex:1"><div class="an">${w.name} ${w.selfMade?'🚀':''} <span style="color:${GRADES[w.grade].col}">${w.grade}級</span> ${(w.awards||[]).join("")}</div>
+      <div class="ad">Day ${w.day} · 分紅 $${fmt(w.royalty*(1+(w.awards?w.awards.length:0)*0.5))}/秒</div></div></div>`).join("") || `<div class="noquest">目前作品集是空的。</div>`;
+  $("modal").innerHTML=`<h2>🖼️ 作品集 <span style="font-size:13px;color:var(--dim)">(${(S.works||[]).length})</span></h2>
+    <div class="achlist">${rows}</div>
+    <div class="modalBtns" style="margin-top:12px"><button class="btn sec" onclick="openCareer()">← 返回</button><button class="btn" onclick="closeModal()">關閉</button></div>`;
+  $("overlay").style.display="flex";
+}
+function awardReady(id){ return (S.day||1) >= ((S.awardCd&&S.awardCd[id])||0); }
+function openAwards(){
+  sfx("click");
+  const fee=Math.floor(salary()*0.5);
+  const rows=AWARDS.map(a=>{
+    const ready=awardReady(a.id);
+    const cdTxt=ready?"可報名":`Day ${S.awardCd[a.id]} 後`;
+    return `<div class="achrow">
+      <div class="ae">${a.badge}</div>
+      <div style="flex:1"><div class="an">${a.name}</div>
+        <div class="ad">${a.country} · 需 ${a.minGrade} 級以上作品 · ${cdTxt}</div></div>
+      <button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${ready?'':'opacity:.5'}" onclick="enterAward('${a.id}')">報名</button>
+    </div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>🌍 國際設計大賽</h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:8px">報名費 💰$${fmt(fee)}／次，將以你最好的合格作品參賽。得獎可大幅提升聲望與該作品分紅！</div>
+    <div class="achlist">${rows}</div>
+    <div class="modalBtns" style="margin-top:12px"><button class="btn sec" onclick="openCareer()">← 返回</button><button class="btn" onclick="closeModal()">關閉</button></div>`;
+  $("overlay").style.display="flex";
+}
+function enterAward(id){
+  const a=AWARDS.find(x=>x.id===id); if(!a) return;
+  if(!awardReady(id)){ toast("尚在冷卻"); return; }
+  const elig=(S.works||[]).filter(w=>gradeRank[w.grade]>=gradeRank[a.minGrade] && !w.awards.includes(a.badge));
+  if(!elig.length){ toast(`需要 ${a.minGrade} 級以上、未得此獎的作品`); sfx("bad"); return; }
+  const fee=Math.floor(salary()*0.5);
+  if(S.cash<fee){ toast("報名費不足"); sfx("bad"); return; }
+  elig.sort((x,y)=>gradeRank[y.grade]-gradeRank[x.grade]);
+  const work=elig[0];
+  S.cash-=fee; if(!S.awardCd) S.awardCd={}; S.awardCd[id]=(S.day||1)+3;
+  const chance=Math.min(0.9, 0.2 + gradeRank[work.grade]*0.16 + skillsAvg()*0.012 + S.rep*0.00004);
+  if(Math.random()<chance){
+    work.awards.push(a.badge); S.awardsWon=(S.awardsWon||0)+1;
+    const prize=Math.floor(salary()*a.prestige*1.6), rep=Math.floor(60*a.prestige+S.level*4);
+    S.cash+=prize; S.rep+=rep; sfx("rank");
+    log(`🏅 ${work.emoji}「${work.name}」榮獲 ${a.badge} <b>${a.name}</b>！+💰$${fmt(prize)}、聲望 +${rep}，該作品分紅提升。`,"y");
+    toast(`🏅 得獎！${a.name}`);
+  } else {
+    sfx("bad");
+    log(`😔 ${work.emoji}「${work.name}」報名 ${a.name} 未入選，再接再厲。`,"r");
+    toast("這次未得獎…");
+  }
+  updateHUD(); checkAch(); save(); openAwards();
+}
+function designerOfYear(){
+  const myScore=S.rep + (S.awardsWon||0)*60 + (S.sworks||0)*25 + (S.works||[]).length*8 + S.level*10;
+  const field=S.rivals.map(r=>({face:r.face,name:r.name,score:Math.floor(r.rep*1.15+Math.random()*220)}));
+  field.push({face:"🧑‍🎨",name:"你",score:Math.floor(myScore),me:true});
+  field.sort((a,b)=>b.score-a.score);
+  const place=field.findIndex(e=>e.me)+1;
+  let head,prizeMsg="";
+  if(place===1){
+    S.doyWins=(S.doyWins||0)+1;
+    const prize=Math.floor(salary()*3), rep=Math.floor(100+S.level*5);
+    S.cash+=prize; S.rep+=rep;
+    head=`👑 恭喜當選第 ${Math.floor((S.day||1)/YEAR_DAYS)} 屆「年度設計師」！`;
+    prizeMsg=`獎金 💰$${fmt(prize)} · 聲望 +${rep}`;
+    sfx("rank"); log(`👑 你當選年度設計師！${prizeMsg}`,"y");
+  } else {
+    head=`🎬 年度設計師頒獎典禮 — 你排名第 ${place}`;
+    sfx("complete"); log(`🎬 年度設計師由 ${field[0].face}${field[0].name} 奪得，你排第 ${place}，明年再拼！`,"b");
+  }
+  for(const r of S.rivals) r.rep+=10+Math.floor(Math.random()*25);
+  const rows=field.map((e,i)=>{
+    const medal=["🥇","🥈","🥉"][i]||("#"+(i+1));
+    return `<div class="achrow" style="${e.me?'border-color:#ffce54;background:#241f10':''}">
+      <div class="ae">${medal}</div>
+      <div style="flex:1"><div class="an">${e.face} ${e.name}</div><div class="ad">綜合評分 ${fmt(e.score)}</div></div>
+      ${e.me?'<div class="tick">⭐</div>':''}</div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>${head}</h2>${prizeMsg?`<div class="say">${prizeMsg}</div>`:''}
+    <div class="achlist">${rows}</div>
+    <div class="modalBtns" style="margin-top:12px"><button class="btn" onclick="closeModal()">${place===1?'接受榮耀 👑':'關閉'}</button></div>`;
+  $("overlay").style.display="flex";
+  updateHUD(); checkAch(); save();
+}
+
+/* ========================================================================
    HUD / skills / log
    ===================================================================== */
 function updateHUD(){
@@ -1557,6 +1772,10 @@ function load(){
     if(typeof S.day!=="number") S.day=1;
     if(typeof S.dayClock!=="number") S.dayClock=0;
     if(typeof S.sworks!=="number") S.sworks=0;
+    if(!Array.isArray(S.works)) S.works=[];
+    if(typeof S.awardsWon!=="number") S.awardsWon=0;
+    if(typeof S.doyWins!=="number") S.doyWins=0;
+    if(!S.awardCd) S.awardCd={};
     if(S.energy>maxEnergy()) S.energy=maxEnergy();
     return true; } }catch(e){}
   return false;
@@ -1606,6 +1825,7 @@ $("bagChip").addEventListener("click", openBag);
 $("dayChip").addEventListener("click", ()=>{ toast(S.daily?`${S.daily.em} ${S.daily.name}：${S.daily.desc}`:"新的一天"); });
 $("restChip").addEventListener("click", doRest);
 $("compChip").addEventListener("click", openComp);
+$("careerChip").addEventListener("click", openCareer);
 $("boardChip").addEventListener("click", openBoard);
 $("goBtn").addEventListener("click", ()=>{
   initAudio(); if(S) S.sound=S.sound;
