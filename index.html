@@ -201,6 +201,7 @@
     📈 完成任務 → 技能、聲望、等級成長。<br>
     🛗 搭電梯上 <b>研發展示大樓 2F</b>，接更高階的專案。<br>
     🛒 用現金到商店買 <b>技能與裝備</b>；💬 和同事交流拉好感，專案更快。<br>
+    🔧 地圖上的物件（工作站/列印機/咖啡機/投影機/獎盃）都能 <b>點擊使用並升級</b>。<br>
     🏁 參加 <b>競圖大賽</b> 和對手一較高下，衝上 📊 排行榜第一！<br>
     🏅 解鎖成就、💼 職級與月薪 <b>無限升級</b>，爽爬到設計之神！<br>
     ☕ 精力用完？去茶水間回血，或按 😴 休息小憩。
@@ -256,6 +257,22 @@ const RIVAL_DEFS = [
   {id:"r_sofia",face:"👱‍♀️", name:"Sofia"},
   {id:"r_jaden",face:"🧑‍🎤", name:"Jaden"},
 ];
+/* ---------- interactive & upgradable map facilities ---------- */
+const FAC = {
+  desk:     {em:"🖥️", name:"個人工作站", kind:"passive", base:1500, grow:1.6,
+    desc:l=>`閒置自動賺 $${idleRate(l)}/秒`},
+  printer:  {em:"🖨️", name:"3D 列印機", kind:"use", cd:15000, base:1200, grow:1.55,
+    desc:l=>`打樣：目前專案進度 +${12+l*6}%`},
+  coffee:   {em:"☕", name:"智慧咖啡機", kind:"use", cd:12000, base:900, grow:1.5,
+    desc:l=>`補滿精力 ＋ ${5+l*3} 秒設計加速 ×1.5`},
+  projector:{em:"📽️", name:"簡報投影機", kind:"use", cd:14000, base:1100, grow:1.55,
+    desc:l=>`練習提案：聲望 +${4+l*3}、簡報經驗↑`},
+  trophy:   {em:"🏆", name:"榮譽展示櫃", kind:"passive", base:2000, grow:1.6,
+    desc:l=>`被動聲望 +${l*2}/10 秒`},
+  plant:    {em:"🪴", name:"療癒植栽", kind:"use", cd:8000, base:400, grow:1.5,
+    desc:l=>`澆水放鬆：精力 +${8+l*4}`},
+};
+function idleRate(l){ return Math.floor(salary()/600*l); }
 
 /* ========================================================================
    floors  —  each floor is an independent map
@@ -267,25 +284,25 @@ function makeGrid(){
   return b;
 }
 function buildFloor1(){
-  const blocked=makeGrid(), decor=[], walls=[];
-  const D=(x,y,em,size)=>{decor.push({x,y,em,size:size||30}); blocked[y][x]=true;};
+  const blocked=makeGrid(), decor=[], walls=[], facs=[];
+  const D=(x,y,em,size,fac)=>{decor.push({x,y,em,size:size||30}); blocked[y][x]=true; if(fac) facs.push({x,y,type:fac});};
   const W=(x,y)=>{walls.push({x,y}); blocked[y][x]=true;};
-  // your desk
-  D(2,14,"🖥️");D(3,15,"🖥️");D(2,16,"🪑",26);D(4,16,"🪴",26);
+  // your desk (interactive: idle income)
+  D(2,14,"🖥️",30,"desk");D(3,15,"🖥️");D(2,16,"🪑",26);D(4,16,"🪴",26,"plant");
   // designer work area
   D(7,12,"🖥️");D(9,12,"🖥️");D(7,14,"🖥️");D(9,14,"🖥️");D(10,15,"🪴",26);
   // UX research
   D(13,12,"🖥️");D(15,12,"🖥️");D(14,14,"🧩",28);D(16,14,"🪴",26);
   // model workshop
-  D(20,12,"🛠️");D(22,12,"🖨️");D(20,14,"🪚",28);D(22,14,"📦",28);D(23,15,"🪴",26);
+  D(20,12,"🛠️");D(22,12,"🖨️",30,"printer");D(20,14,"🪚",28);D(22,14,"📦",28);D(23,15,"🪴",26);
   // meeting room
   D(5,3,"🪑",26);D(7,3,"🪑",26);D(6,3,"🍩",26);D(5,5,"🪑",26);D(7,5,"🪑",26);
   // presentation
-  D(13,3,"📽️");D(15,3,"📊",28);D(14,5,"🖼️",28);
+  D(13,3,"📽️",30,"projector");D(15,3,"📊",28);D(14,5,"🖼️",28);
   // director office
-  D(20,3,"🖥️");D(22,3,"🏆",28);D(21,5,"🪴",26);D(23,3,"🛋️",28);
+  D(20,3,"🖥️");D(22,3,"🏆",28,"trophy");D(21,5,"🪴",26);D(23,3,"🛋️",28);
   // pantry
-  D(11,9,"☕");D(13,9,"🧃",26);D(12,10,"🍪",26);
+  D(11,9,"☕",30,"coffee");D(13,9,"🧃",26);D(12,10,"🍪",26);
   // reception
   D(2,7,"🛎️",26);D(2,9,"🪴",26);D(4,9,"🖥️");
   // plants
@@ -298,7 +315,7 @@ function buildFloor1(){
   // elevator
   const elevator={x:18,y:9}; blocked[9][18]=true;
   return {
-    name:"設計中心 1F", blocked, decor, walls, elevator,
+    name:"設計中心 1F", blocked, decor, walls, elevator, facs,
     pantry:{x:12,y:9}, start:{x:3,y:14},
     zones:[
       {x:3,y:14,name:"你的座位"},{x:8,y:13,name:"設計師工作區"},{x:14,y:13,name:"UX 研究室"},
@@ -324,22 +341,22 @@ function buildFloor1(){
   };
 }
 function buildFloor2(){
-  const blocked=makeGrid(), decor=[], walls=[];
-  const D=(x,y,em,size)=>{decor.push({x,y,em,size:size||30}); blocked[y][x]=true;};
+  const blocked=makeGrid(), decor=[], walls=[], facs=[];
+  const D=(x,y,em,size,fac)=>{decor.push({x,y,em,size:size||30}); blocked[y][x]=true; if(fac) facs.push({x,y,type:fac});};
   const W=(x,y)=>{walls.push({x,y}); blocked[y][x]=true;};
   // showcase center
-  D(3,12,"🏆",28);D(5,12,"📱");D(7,12,"💻");D(9,12,"⌚",28);
+  D(3,12,"🏆",28,"trophy");D(5,12,"📱");D(7,12,"💻");D(9,12,"⌚",28);
   D(4,14,"🎧");D(6,14,"🖱️",28);D(8,14,"🎮",28);D(10,15,"🪴",26);
   // user testing room
   D(13,12,"🖥️");D(15,12,"🪟",28);D(14,14,"🪑",26);D(16,14,"🪴",26);
   // VIP lounge
-  D(5,3,"🛋️",28);D(7,3,"☕");D(6,5,"🍵",28);
+  D(5,3,"🛋️",28);D(7,3,"☕",30,"coffee");D(6,5,"🍵",28);
   // roof garden (pantry)
   D(12,3,"🌳");D(14,3,"🌸",28);D(13,5,"⛲",30);
   // master studio
-  D(20,3,"🗿",28);D(22,3,"🖌️",28);D(21,5,"🎨");D(23,5,"🪴",26);
+  D(20,3,"🗿",28);D(22,3,"🖌️",28);D(21,5,"🎨");D(23,5,"🪴",26,"plant");
   // workshop-ish bottom right
-  D(20,12,"🧵",28);D(22,12,"📐",28);D(21,14,"📦",28);D(23,15,"🪴",26);
+  D(20,12,"🧵",28);D(22,12,"📐",28,"printer");D(21,14,"📦",28);D(23,15,"🪴",26);
   // plants / atrium
   D(17,8,"🪴",26);D(10,15,"🪴",26);D(18,15,"🪴",26);D(4,8,"🖼️",28);
   // partitions (mirror layout)
@@ -349,7 +366,7 @@ function buildFloor2(){
   W(10,1);W(11,1);W(12,1);
   const elevator={x:18,y:9}; blocked[9][18]=true;
   return {
-    name:"研發展示大樓 2F", blocked, decor, walls, elevator,
+    name:"研發展示大樓 2F", blocked, decor, walls, elevator, facs,
     pantry:{x:13,y:4}, start:{x:17,y:9},
     zones:[
       {x:6,y:13,name:"產品展示中心"},{x:14,y:13,name:"使用者測試室"},{x:21,y:13,name:"打樣工坊"},
@@ -394,6 +411,7 @@ const ACH = [
   {id:"bff",    em:"💞", name:"辦公室摯友", desc:"與同事好感達 100",   chk:s=>Object.values(s.rel||{}).some(v=>v>=100)},
   {id:"champ",  em:"🏁", name:"競圖冠軍",   desc:"贏得一次競圖大賽",   chk:s=>(s.compWins||0)>=1},
   {id:"top1",   em:"👑", name:"設計界之巔", desc:"聲望登上排行榜第一", chk:s=>s.rivals&&s.rivals.length&&s.rivals.every(r=>s.rep>=r.rep)},
+  {id:"fac5",   em:"🏗️", name:"設備狂人",   desc:"任一設施升到 Lv5",   chk:s=>Object.values(s.fac||{}).some(v=>v>=5)},
 ];
 function seenCount(s){ return Object.values(s.seen||{}).reduce((a,o)=>a+Object.keys(o).length,0); }
 
@@ -412,6 +430,7 @@ function freshState(){
     equip:{tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0},
     rel:{}, rivals:initRivals(), compWins:0,
     restCdUntil:0, compCdUntil:0,
+    fac:{}, facCd:{}, buffUntil:0, buffAmt:1,
   };
 }
 function initRivals(){ return RIVAL_DEFS.map(r=>({id:r.id, face:r.face, name:r.name, rep:30+Math.floor(Math.random()*90)})); }
@@ -533,10 +552,22 @@ function drawNpcs(){
       <animate attributeName="opacity" values="0.4;1;0.4" dur="1.4s" repeatCount="indefinite"/></text>
     <text x="${e.x*T+T/2}" y="${e.y*T+T*0.72}" font-size="10" fill="#5aa9ff" text-anchor="middle" font-weight="700">電梯</text>
     </g>`;
+  // interactive facilities (clickable, with pulsing gear badge)
+  (FLOOR.facs||[]).forEach(fc=>{
+    layers.npc.innerHTML += `<g data-fac="${fc.type}" style="cursor:pointer">
+      <rect x="${fc.x*T}" y="${fc.y*T}" width="${T}" height="${T}" fill="transparent"/>
+      <text x="${fc.x*T+T*0.78}" y="${fc.y*T+T*0.28}" font-size="15" text-anchor="middle">🔧
+        <animate attributeName="opacity" values="0.45;1;0.45" dur="1.6s" repeatCount="indefinite"/></text>
+      <text x="${fc.x*T+T/2}" y="${fc.y*T+T*0.9}" font-size="9" fill="#7fd6a0" text-anchor="middle" font-weight="700">Lv${facLv(fc.type)}</text>
+    </g>`;
+  });
   layers.npc.querySelectorAll("[data-npc]").forEach(g=>{
     g.addEventListener("click", e=>{ e.stopPropagation(); goToNpc(g.getAttribute("data-npc")); });
   });
   layers.npc.querySelector("[data-elev]").addEventListener("click", e=>{ e.stopPropagation(); goToElevator(); });
+  layers.npc.querySelectorAll("[data-fac]").forEach(g=>{
+    g.addEventListener("click", e=>{ e.stopPropagation(); goToFac(g.getAttribute("data-fac")); });
+  });
 }
 let playerEl;
 function drawPlayer(){
@@ -576,7 +607,7 @@ function reveal(cx,cy){
 let px = 3*T+T/2, py = 14*T+T/2;
 let camX = px, camY = py;
 let path = [];
-let pendingNpc = null, pendingElev = false;
+let pendingNpc = null, pendingElev = false, pendingFac = null;
 let bob = 0, stepCount = 0;
 
 function bfs(sx,sy,tx,ty){
@@ -630,17 +661,25 @@ function goToNpc(id){
   if(p){ path=p; pendingNpc=n; sfx("click"); }
 }
 function goToElevator(){
-  const e=FLOOR.elevator; pendingNpc=null;
+  const e=FLOOR.elevator; pendingNpc=null; pendingFac=null;
   if(Math.abs(S.px-e.x)+Math.abs(S.py-e.y)<=1){ useElevator(); return; }
   const open=nearestOpen(e.x,e.y); if(!open) return;
   const p=bfs(S.px,S.py,open.x,open.y);
   if(p){ path=p; pendingElev=true; sfx("click"); }
 }
+function goToFac(type){
+  const fc=(FLOOR.facs||[]).find(a=>a.type===type); if(!fc) return;
+  pendingNpc=null; pendingElev=false;
+  if(Math.abs(S.px-fc.x)+Math.abs(S.py-fc.y)<=1){ openFac(type); return; }
+  const open=nearestOpen(fc.x,fc.y); if(!open) return;
+  const p=bfs(S.px,S.py,open.x,open.y);
+  if(p){ path=p; pendingFac=type; sfx("click"); }
+}
 
 stage.addEventListener("click", e=>{
   const pt = svgPoint(e);
   const gx = Math.floor(pt.x/T), gy = Math.floor(pt.y/T);
-  pendingNpc=null; pendingElev=false;
+  pendingNpc=null; pendingElev=false; pendingFac=null;
   moveTo(gx,gy);
 });
 function svgPoint(e){
@@ -663,6 +702,7 @@ function tryInteractHere(){
   const e=FLOOR.elevator;
   if(Math.abs(S.px-e.x)+Math.abs(S.py-e.y)<=1){ useElevator(); return; }
   for(const n of FLOOR.npcs) if(Math.abs(S.px-n.x)+Math.abs(S.py-n.y)<=1){ openNpc(n); return; }
+  for(const fc of (FLOOR.facs||[])) if(Math.abs(S.px-fc.x)+Math.abs(S.py-fc.y)<=1){ openFac(fc.type); return; }
 }
 
 /* ========================================================================
@@ -680,6 +720,7 @@ function tick(){
       if(path.length===0){
         if(pendingNpc){ const n=pendingNpc; pendingNpc=null; openNpc(n); }
         else if(pendingElev){ pendingElev=false; useElevator(); }
+        else if(pendingFac){ const t=pendingFac; pendingFac=null; openFac(t); }
       }
     } else { px += dx/dist*SPEED; py += dy/dist*SPEED; }
     bob += 0.35;
@@ -878,7 +919,7 @@ function sprint(){
   if(!S.quest || S.energy<6) return;
   S.energy-=6;
   const sk=S.skills[S.quest.skill];
-  const gain = (8*(1+sk.lv*0.12) + Math.random()*4)*sprintMult()*relSpeed(S.quest.npc)*coopMult();
+  const gain = (8*(1+sk.lv*0.12) + Math.random()*4)*sprintMult()*relSpeed(S.quest.npc)*coopMult()*buffMult();
   sfx("sprint");
   addProgress(gain, true);
   updateHUD();
@@ -887,7 +928,7 @@ setInterval(()=>{
   if(!S) return;
   if(S.quest){
     const sk=S.skills[S.quest.skill];
-    addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(S.quest.npc)*coopMult(), false);
+    addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(S.quest.npc)*coopMult()*buffMult(), false);
   }
   if(S.energy<maxEnergy()){ S.energy=Math.min(maxEnergy(), S.energy+energyRegen()); updateHUD(); }
 }, 240);
@@ -1192,6 +1233,83 @@ setInterval(()=>{
 }, 9000);
 
 /* ========================================================================
+   interactive & upgradable map facilities
+   ===================================================================== */
+function facLv(type){ return (S.fac&&S.fac[type])||1; }
+function facCost(type){ const f=FAC[type]; return Math.floor(f.base*Math.pow(f.grow, facLv(type)-1)); }
+function facReady(type){ return Date.now()>=((S.facCd&&S.facCd[type])||0); }
+function facCdLeft(type){ return Math.max(0, Math.ceil((((S.facCd&&S.facCd[type])||0)-Date.now())/1000)); }
+function setFacCd(type,ms){ if(!S.facCd) S.facCd={}; S.facCd[type]=Date.now()+ms; }
+function trophyRate(l){ return l*2; }
+function buffMult(){ return (S.buffUntil && Date.now()<S.buffUntil)? (S.buffAmt||1) : 1; }
+function openFac(type){
+  sfx("click");
+  const f=FAC[type], lv=facLv(type), cost=facCost(type);
+  let action="";
+  if(f.kind==="use"){
+    const ready=facReady(type);
+    action=`<button class="btn" onclick="useFac('${type}')" ${ready?'':'disabled style="filter:grayscale(.7) brightness(.7)"'}>${ready?'使用 ▶':('冷卻中 '+facCdLeft(type)+'s')}</button>`;
+  } else {
+    action=`<div class="say">被動設施 — 升級即自動生效，全天候運作中。</div>`;
+  }
+  $("modal").innerHTML=`<div class="who"><div class="face">${f.em}</div>
+      <div><div class="nm">${f.name} <span style="color:var(--blue)">Lv${lv}</span></div>
+      <div class="role">設計中心設施 · 可升級</div></div></div>
+    <div class="offer">
+      <div class="row"><span>目前效果</span><span>${f.desc(lv)}</span></div>
+      <div class="row"><span>升級後</span><span style="color:var(--grn)">${f.desc(lv+1)}</span></div>
+    </div>
+    ${action}
+    <button class="btn sec" style="margin-top:8px" onclick="upgradeFac('${type}')">⬆️ 升級設施 ($${fmt(cost)})</button>
+    <button class="btn sec" style="margin-top:8px" onclick="closeModal()">關閉</button>`;
+  $("overlay").style.display="flex";
+}
+function upgradeFac(type){
+  const cost=facCost(type);
+  if(S.cash<cost){ toast("💸 現金不足"); sfx("bad"); return; }
+  S.cash-=cost; if(!S.fac) S.fac={}; S.fac[type]=facLv(type)+1;
+  sfx("level"); log(`🔧 升級設施 ${FAC[type].em}${FAC[type].name} → Lv${facLv(type)}`,"g");
+  updateHUD(); drawNpcs(); checkAch(); save(); openFac(type);
+}
+function useFac(type){
+  if(!facReady(type)){ toast("冷卻中"); return; }
+  const lv=facLv(type);
+  if(type==="printer"){
+    if(!S.quest){ toast("目前沒有專案可打樣"); sfx("bad"); return; }
+    const add=S.quest.goal*(0.12+lv*0.06);
+    setFacCd(type, FAC.printer.cd);
+    sfx("complete"); log(`🖨️ 3D 列印打樣，專案進度 +${Math.round((0.12+lv*0.06)*100)}%`,"b");
+    addProgress(add, true);
+  } else if(type==="coffee"){
+    S.energy=maxEnergy(); S.buffUntil=Date.now()+(5+lv*3)*1000; S.buffAmt=1.5;
+    setFacCd(type, FAC.coffee.cd);
+    sfx("coffee"); log(`☕ 現煮咖啡！精力全滿，${5+lv*3} 秒內設計加速 ×1.5`,"y"); updateHUD();
+  } else if(type==="projector"){
+    const rep=4+lv*3; S.rep+=rep;
+    gainSkill("present", Math.floor(skillXpNeed(S.skills.present.lv)*0.2*lv));
+    setFacCd(type, FAC.projector.cd);
+    sfx("good"); log(`📽️ 練習提案：聲望 +${rep}、簡報經驗增加`,"p"); updateHUD();
+  } else if(type==="plant"){
+    const e=8+lv*4; S.energy=Math.min(maxEnergy(),S.energy+e);
+    setFacCd(type, FAC.plant.cd);
+    sfx("good"); log(`🪴 澆水放鬆，精力 +${e}`,"g"); updateHUD();
+  }
+  checkAch(); save();
+  if($("overlay").style.display==="flex") openFac(type);
+}
+
+/* passive facilities tick: idle income + trophy reputation */
+setInterval(()=>{
+  if(!S || $("start").style.display!=="none") return;
+  let changed=false;
+  const inc=idleRate(facLv("desk"));
+  if(inc>0){ S.cash+=inc; changed=true; }
+  const tr=trophyRate(facLv("trophy"))/10;
+  if(tr>0){ S.rep+=tr; changed=true; }
+  if(changed){ updateHUD(); }
+}, 1000);
+
+/* ========================================================================
    HUD / skills / log
    ===================================================================== */
 function updateHUD(){
@@ -1259,6 +1377,9 @@ function load(){
     if(typeof S.compWins!=="number") S.compWins=0;
     if(typeof S.restCdUntil!=="number") S.restCdUntil=0;
     if(typeof S.compCdUntil!=="number") S.compCdUntil=0;
+    if(!S.fac) S.fac={}; if(!S.facCd) S.facCd={};
+    if(typeof S.buffUntil!=="number") S.buffUntil=0;
+    if(typeof S.buffAmt!=="number") S.buffAmt=1;
     if(S.energy>maxEnergy()) S.energy=maxEnergy();
     return true; } }catch(e){}
   return false;
