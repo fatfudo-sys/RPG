@@ -170,7 +170,7 @@
       <div id="zoneTag">你的座位</div>
       <div id="daynight"></div>
       <svg id="stage" preserveAspectRatio="xMidYMid slice"></svg>
-      <div id="hint">🖱️ 點地圖走動 · 點 NPC💬 接任務/交流 · 🛗 換樓層 · 🛒商店 🏁競圖 · WASD 也可</div>
+      <div id="hint">🖱️ 點地圖走動 · 點 NPC💬 接任務 · 🛗 電梯選樓層(越高越強) · 🛒商店 🏁競圖 · WASD 也可</div>
     </div>
 
     <div id="side">
@@ -206,7 +206,7 @@
     🚶 在設計中心自由走動，探索地圖、認識同事。<br>
     💬 找 NPC 接下 <b>設計任務與需求</b>，完成它！<br>
     📈 完成任務 → 技能、聲望、等級成長。<br>
-    🛗 搭電梯上 <b>研發展示大樓 2F</b>，接更高階的專案。<br>
+    🛗 搭電梯挑戰 <b>無限樓層</b>：等級越高解鎖越高樓層，任務難度與回報也越高！<br>
     🛒 用現金到商店買 <b>技能與裝備</b>；💬 和同事交流拉好感，專案更快。<br>
     🔧 地圖上的物件（工作站/列印機/咖啡機/投影機/獎盃）都能 <b>點擊使用並升級</b>。<br>
     📅 每天有不同 <b>狀態加成</b>、會發日薪、還有 <b>突發事件</b> 要你抉擇。<br>
@@ -465,9 +465,66 @@ function buildFloor2(){
     ],
   };
 }
-const FLOORS = [buildFloor1(), buildFloor2()];
-let curFloor = 0;
-let FLOOR = FLOORS[0];
+/* ========================================================================
+   infinite floors — higher floors need higher level, harder & richer
+   ===================================================================== */
+const floorCache = {};
+function getFloor(n){ if(!floorCache[n]) floorCache[n]=buildFloor(n); return floorCache[n]; }
+function buildFloor(n){ return n===1?buildFloor1() : n===2?buildFloor2() : buildFloorN(n); }
+function floorReqLevel(n){ return n<=1?1 : (n-1)*4; }         // 樓層解鎖等級
+function maxFloorUnlocked(){ let n=1; while(floorReqLevel(n+1)<=S.level) n++; return n; }
+function floorBonus(n){ return 1 + (n-1)*0.55; }             // 回報倍率
+function floorDiffBonus(n){ return (n-1); }                  // 難度加成
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+
+const FLOOR_THEMES = ["設計中心","研發展示大樓","海外研發中心","先端設計實驗室","創新設計總部",
+  "全球設計旗艦","未來設計研究院","數位體驗中心","永續設計基地","星際設計中心"];
+const NPC_FACES=["🧑‍🎨","👩‍💻","🧑‍🔧","🧑‍💼","🧑‍🏫","👔","👩‍🔬","🧓","👷","🧑‍🚀","🕵️","👩‍🎨","🧑‍💻"];
+const NPC_FIRST=["高","陳","林","王","李","張","Alex","Mia","Ken","Yuki","Hans","Luca","Sara","Omar"];
+const ROLE_TIER=["設計師","資深設計師","主任設計師","首席設計師","設計總監","傳奇設計顧問"];
+
+function buildFloorN(n){
+  const rng=mulberry32(n*99991+7);
+  const ri=(a,b)=>Math.floor(rng()*(b-a+1))+a;
+  const blocked=makeGrid(), decor=[], walls=[], facs=[];
+  const used=new Set(); used.add("18,9"); used.add("17,9");
+  const free=(x,y)=>x>1&&x<COLS-1&&y>1&&y<ROWS-1&&!used.has(x+","+y);
+  const spot=()=>{ let x,y,g=0; do{ x=ri(2,COLS-2); y=ri(2,ROWS-2); g++; }while(!free(x,y)&&g<200); used.add(x+","+y); return {x,y}; };
+  const D=(x,y,em,size,fac)=>{ decor.push({x,y,em,size:size||30}); blocked[y][x]=true; if(fac) facs.push({x,y,type:fac}); };
+  // facilities (single-tile obstacles on an otherwise open field → always reachable)
+  const coffeeP=spot(); D(coffeeP.x,coffeeP.y,"☕",30,"coffee");
+  const pr=spot(); D(pr.x,pr.y,"🖨️",30,"printer");
+  const tr=spot(); D(tr.x,tr.y,"🏆",28,"trophy");
+  const pj=spot(); D(pj.x,pj.y,"📽️",30,"projector");
+  const dk=spot(); D(dk.x,dk.y,"🖥️",30,"desk");
+  const pl=spot(); D(pl.x,pl.y,"🪴",26,"plant");
+  // filler decor
+  const fill=["🖥️","🪑","🪴","📦","🖼️","📐","🧩","🛋️","💡","🌿"];
+  const nDecor=ri(8,12); for(let i=0;i<nDecor;i++){ const s=spot(); D(s.x,s.y,fill[ri(0,fill.length-1)],26); }
+  // NPCs
+  const nNpc=4+ (n%3);
+  const npcs=[];
+  const tierIdx=Math.min(ROLE_TIER.length-1, 1+Math.floor(n/2));
+  for(let i=0;i<nNpc;i++){
+    const s=spot(); used.add(s.x+","+s.y);
+    const spec=SKILL_KEYS[ri(0,SKILL_KEYS.length-1)];
+    const nm=NPC_FIRST[ri(0,NPC_FIRST.length-1)]+ (rng()<0.4? "":["前輩","顧問","組長","大大",""][ri(0,4)]);
+    npcs.push({ id:`f${n}_npc${i}`, x:s.x, y:s.y, face:NPC_FACES[ri(0,NPC_FACES.length-1)],
+      name:nm, role:`${ROLE_TIER[tierIdx]}`, spec,
+      hi:["這層樓的案子可不簡單，敢接嗎？","高手才留得住，這個交給你。","樓層越高，挑戰越大，證明自己吧。"] });
+  }
+  // a few zone labels at cluster spots
+  const zones=[{x:18,y:9,name:"電梯"}];
+  const zNames=["工作區","會客室","休息區","實驗區","展示區"];
+  for(let i=0;i<3;i++){ const s=spot(); zones.push({x:s.x,y:s.y,name:zNames[i%zNames.length]}); }
+  const elevator={x:18,y:9}; blocked[9][18]=true;
+  const themeBase=FLOOR_THEMES[(n-1)%FLOOR_THEMES.length];
+  const suffix = n>FLOOR_THEMES.length ? " ✦"+Math.ceil(n/FLOOR_THEMES.length) : "";
+  return { name:`${themeBase}${suffix} ${n}F`, blocked, decor, walls, elevator, facs,
+    pantry:{x:coffeeP.x,y:coffeeP.y}, start:{x:17,y:9}, zones, npcs };
+}
+let curFloor = 1;
+let FLOOR;
 
 /* ========================================================================
    achievements
@@ -483,7 +540,9 @@ const ACH = [
   {id:"rich",   em:"💰", name:"第一桶金",   desc:"現金累積達 100,000", chk:s=>s.cash>=100000},
   {id:"sk10",   em:"🧠", name:"一技之長",   desc:"任一技能達 Lv.10",   chk:s=>Object.values(s.skills).some(k=>k.lv>=10)},
   {id:"skall",  em:"🎨", name:"全才設計師", desc:"所有技能達 Lv.5",    chk:s=>Object.values(s.skills).every(k=>k.lv>=5)},
-  {id:"f2",     em:"🛗", name:"登上大樓",   desc:"搭電梯到二樓",       chk:s=>!!s.visited2},
+  {id:"f2",     em:"🛗", name:"登上高樓",   desc:"抵達第 2 層樓",      chk:s=>(s.maxFloor||1)>=2},
+  {id:"f5",     em:"🏙️", name:"高處風景",   desc:"抵達第 5 層樓",      chk:s=>(s.maxFloor||1)>=5},
+  {id:"f10",    em:"🚀", name:"摩天設計師", desc:"抵達第 10 層樓",     chk:s=>(s.maxFloor||1)>=10},
   {id:"explore",em:"🗺️", name:"地圖探險家", desc:"探索 200 格地圖",    chk:s=>seenCount(s)>=200},
   {id:"gear",   em:"🧰", name:"工欲善其事", desc:"升級任一件裝備",     chk:s=>Object.values(s.equip||{}).some(v=>v>0)},
   {id:"bff",    em:"💞", name:"辦公室摯友", desc:"與同事好感達 100",   chk:s=>Object.values(s.rel||{}).some(v=>v>=100)},
@@ -509,8 +568,8 @@ function freshState(){
     level:1, exp:0, rep:0, cash:0, energy:100, tasksDone:0,
     skills:Object.fromEntries(SKILL_KEYS.map(k=>[k,{lv:1,xp:0}])),
     quest:null, npcQuestReady:{},
-    seen:{0:{},1:{}},
-    px:3, py:14, floor:0,
+    seen:{}, ver:3,
+    px:3, py:14, floor:1, maxFloor:1,
     ach:{}, sound:true, visited2:false,
     equip:{tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0},
     rel:{}, rivals:initRivals(), compWins:0,
@@ -541,6 +600,7 @@ function salary(){
   return Math.floor((30000 + S.rep*90) * Math.pow(1.16, S.level-1) * (1 + rankIndex()*0.28));
 }
 function fmt(n){ return Math.floor(n).toLocaleString('en-US'); }
+function diffStars(d){ return d<=5 ? "⭐".repeat(d) : "⭐×"+d; }
 
 /* ========================================================================
    audio (WebAudio synth, no external files)
@@ -591,6 +651,7 @@ function buildLayers(){
   drawFloor(); drawDecor(); drawLabels(); drawNpcs(); drawPlayer(); drawFog();
 }
 function tileVisible(x,y){ return !!(S.seen[curFloor] && S.seen[curFloor][x+","+y]); }
+function seenFloor(){ if(!S.seen[curFloor]) S.seen[curFloor]={}; return S.seen[curFloor]; }
 
 const ZONE_PAL = ["#5a4488","#2f5a6a","#3a6a4a","#6a5a2a","#6a3a4a","#3a4a7a","#5a3a6a","#2a6a5a","#6a4a2a","#4a5a2a"];
 function drawFloor(){
@@ -693,7 +754,7 @@ function drawFog(){
   layers.fog.innerHTML = html;
 }
 function reveal(cx,cy){
-  const seen=S.seen[curFloor];
+  const seen=seenFloor();
   let changed=false;
   for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
     const x=cx+dx,y=cy+dy;
@@ -764,7 +825,7 @@ function goToNpc(id){
 }
 function goToElevator(){
   const e=FLOOR.elevator; pendingNpc=null; pendingFac=null;
-  if(Math.abs(S.px-e.x)+Math.abs(S.py-e.y)<=1){ useElevator(); return; }
+  if(Math.abs(S.px-e.x)+Math.abs(S.py-e.y)<=1){ openFloorSelect(); return; }
   const open=nearestOpen(e.x,e.y); if(!open) return;
   const p=bfs(S.px,S.py,open.x,open.y);
   if(p){ path=p; pendingElev=true; sfx("click"); }
@@ -802,7 +863,7 @@ document.addEventListener("keydown", e=>{
 });
 function tryInteractHere(){
   const e=FLOOR.elevator;
-  if(Math.abs(S.px-e.x)+Math.abs(S.py-e.y)<=1){ useElevator(); return; }
+  if(Math.abs(S.px-e.x)+Math.abs(S.py-e.y)<=1){ openFloorSelect(); return; }
   for(const n of FLOOR.npcs) if(Math.abs(S.px-n.x)+Math.abs(S.py-n.y)<=1){ openNpc(n); return; }
   for(const fc of (FLOOR.facs||[])) if(Math.abs(S.px-fc.x)+Math.abs(S.py-fc.y)<=1){ openFac(fc.type); return; }
 }
@@ -821,7 +882,7 @@ function tick(){
       onEnterTile();
       if(path.length===0){
         if(pendingNpc){ const n=pendingNpc; pendingNpc=null; openNpc(n); }
-        else if(pendingElev){ pendingElev=false; useElevator(); }
+        else if(pendingElev){ pendingElev=false; openFloorSelect(); }
         else if(pendingFac){ const t=pendingFac; pendingFac=null; openFac(t); }
       }
     } else { px += dx/dist*SPEED; py += dy/dist*SPEED; }
@@ -851,9 +912,9 @@ function onEnterTile(){
   let z = nearestZone();
   if(z && z.name!==lastZone){ lastZone=z.name; showZone(z.name); }
   const pantry=FLOOR.pantry;
-  if(Math.abs(S.px-pantry.x)+Math.abs(S.py-pantry.y)<=1 && S.energy<100){
+  if(Math.abs(S.px-pantry.x)+Math.abs(S.py-pantry.y)<=1 && S.energy<maxEnergy()){
     S.energy = maxEnergy(); sfx("coffee");
-    log(curFloor===0?"☕ 在茶水間喝了咖啡，精力全滿！":"🌳 在頂樓花園放鬆一下，精力全滿！","y"); updateHUD();
+    log("☕ 在茶水間補充能量，精力全滿！","y"); updateHUD();
   }
   maybeEvent();
   checkAch();
@@ -896,15 +957,38 @@ function maybeEvent(){
 /* ========================================================================
    elevator / floor switch
    ===================================================================== */
-function useElevator(){ switchFloor(curFloor===0?1:0); }
+function openFloorSelect(){
+  sfx("click");
+  const maxU=maxFloorUnlocked();
+  const rows=[];
+  for(let n=1;n<=maxU+1;n++){
+    const req=floorReqLevel(n), locked=n>maxU, cur=n===curFloor;
+    const f = locked ? null : getFloor(n);
+    const name = f ? f.name : `${FLOOR_THEMES[(n-1)%FLOOR_THEMES.length]} ${n}F`;
+    rows.push(`<div class="achrow ${locked?'locked':''}" style="${cur?'border-color:#5aa9ff;background:#12203a':''}">
+      <div class="ae">${locked?'🔒':(cur?'📍':'🛗')}</div>
+      <div style="flex:1"><div class="an">${name} ${cur?'<span style="color:var(--blue)">(所在)</span>':''}</div>
+        <div class="ad">${locked?('需 Lv'+req+' 解鎖'):('回報 ×'+floorBonus(n).toFixed(2)+' · 難度 +'+floorDiffBonus(n))}</div></div>
+      ${locked?'':`<button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${cur?'opacity:.4':''}" ${cur?'disabled':''} onclick="switchFloor(${n})">前往</button>`}
+    </div>`);
+  }
+  $("modal").innerHTML=`<h2>🛗 電梯 · 樓層選擇</h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:8px">樓層越高，任務難度與回報越高。等級提升可解鎖更高樓層（無上限）。目前 Lv${S.level}。</div>
+    <div class="achlist">${rows.join("")}</div>
+    <div class="modalBtns" style="margin-top:12px"><button class="btn" onclick="closeModal()">關閉</button></div>`;
+  $("overlay").style.display="flex";
+}
 function switchFloor(to){
-  sfx("elevator");
+  if(to===curFloor){ closeModal(); return; }
+  if(to>maxFloorUnlocked()){ toast("等級不足，無法前往"); sfx("bad"); return; }
+  sfx("elevator"); closeModal();
   const wrap=$("stageWrap");
   wrap.style.opacity=0;
   setTimeout(()=>{
-    curFloor=to; FLOOR=FLOORS[to]; S.floor=to;
+    curFloor=to; FLOOR=getFloor(to); S.floor=to;
     if(!S.seen[to]) S.seen[to]={};
-    if(to===1) S.visited2=true;
+    S.maxFloor=Math.max(S.maxFloor||1, to);
+    if(to>=2) S.visited2=true;
     const open=nearestOpen(FLOOR.elevator.x,FLOOR.elevator.y) || FLOOR.start;
     S.px=open.x; S.py=open.y;
     px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
@@ -924,12 +1008,12 @@ function makeQuest(npc){
   const [pn,pe] = PRODUCTS[Math.floor(Math.random()*PRODUCTS.length)];
   const adj = ADJ[Math.floor(Math.random()*ADJ.length)];
   const client = CLIENTS[Math.floor(Math.random()*CLIENTS.length)];
-  const floorBonus = curFloor===1 ? 1.6 : 1;   // floor 2 quests are richer & harder
-  const diff = 1 + Math.floor(Math.random()*3) + (curFloor===1?1:0);
+  const fb = floorBonus(curFloor);              // 樓層越高，回報越高
+  const diff = 1 + Math.floor(Math.random()*3) + floorDiffBonus(curFloor);
   const goal = Math.floor((40 + diff*30) * (1+ (S.level-1)*0.12));
-  const expR = Math.floor(expNeed(S.level)*(0.35+diff*0.22)*floorBonus);
-  const repR = Math.floor((6+diff*7) * (1+(S.level-1)*0.06) * floorBonus);
-  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6) * floorBonus);
+  const expR = Math.floor(expNeed(S.level)*(0.35+diff*0.22)*fb);
+  const repR = Math.floor((6+diff*7) * (1+(S.level-1)*0.06) * fb);
+  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6) * fb);
   const skR  = Math.floor(skillXpNeed(S.skills[npc.spec].lv)*(0.5+diff*0.3));
   return {
     npc:npc.id, npcName:npc.name, npcFace:npc.face,
@@ -978,7 +1062,7 @@ function offerBlock(q){
   return `<div class="offer">
      <div class="row"><span>${q.emoji} 專案</span><span>${q.title}</span></div>
      <div class="row"><span>客戶</span><span>${q.client}</span></div>
-     <div class="row"><span>難度</span><span>${"⭐".repeat(q.diff)}</span></div>
+     <div class="row"><span>難度</span><span>${diffStars(q.diff)}</span></div>
      <div class="row"><span>主要技能</span><span>${SKILLS[q.skill].em} ${SKILLS[q.skill].name}</span></div>
      <hr style="border-color:#2a3346;border-style:dashed;margin:8px 0">
      <div class="row"><span>報酬</span><span style="color:var(--gold)">💰 $${fmt(effCash)}</span></div>
@@ -1017,7 +1101,7 @@ function renderTask(){
     const sk=S.skills[q.skill];
     body.innerHTML=`
       <div class="qt">${q.emoji} ${q.title}</div>
-      <div class="qsub">${q.client} · ${"⭐".repeat(q.diff)} · 主技能 ${SKILLS[q.skill].em}${SKILLS[q.skill].name} Lv${sk.lv}</div>
+      <div class="qsub">${q.client} · ${diffStars(q.diff)} · 主技能 ${SKILLS[q.skill].em}${SKILLS[q.skill].name} Lv${sk.lv}</div>
       <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
       <div class="qmeta"><span>進度 ${Math.floor(pct)}%</span><span>💰$${fmt(q.rewards.cash*cashMult())} · ⭐${Math.floor(q.rewards.exp*xpMult())}</span></div>
       <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力設計！ <span style="font-size:11px">(⚡6)</span></button>
@@ -1184,7 +1268,7 @@ function favor(id){ return Math.min(100, (S.rel&&S.rel[id])||0); }
 function relSpeed(id){ return 1 + favor(id)/100*0.6; }
 function coopLevel(){ const v=Object.values(S.rel||{}); if(!v.length) return 0; return v.reduce((a,b)=>a+Math.min(100,b),0)/v.length; }
 function coopMult(){ return 1 + coopLevel()/100*0.3; }
-function findNpc(id){ for(const f of FLOORS){ const n=f.npcs.find(a=>a.id===id); if(n) return n; } return null; }
+function findNpc(id){ for(const k in floorCache){ const n=floorCache[k].npcs.find(a=>a.id===id); if(n) return n; } return null; }
 
 /* ========================================================================
    colleague interaction (chat / gift → 好感度 / 合作度)
@@ -1755,12 +1839,20 @@ const KEY="dc-survivor-v2";
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 function load(){
   try{ const raw=localStorage.getItem(KEY); if(raw){ const o=JSON.parse(raw);
+    const migrate = o.ver!==3;      // migrate 0-indexed floors → 1-indexed
     S=Object.assign(freshState(),o);
     for(const k of SKILL_KEYS) if(!S.skills[k]) S.skills[k]={lv:1,xp:0};
-    if(!S.seen) S.seen={0:{},1:{}};
-    if(!S.seen[0]) S.seen[0]={}; if(!S.seen[1]) S.seen[1]={};
+    if(!S.seen || typeof S.seen!=="object") S.seen={};
+    if(migrate){
+      const s={}; for(const k in S.seen){ s[String(Number(k)+1)]=S.seen[k]; }
+      S.seen=s;
+      S.floor=(typeof o.floor==="number"?o.floor:0)+1;
+      S.maxFloor=Math.max(S.maxFloor||1, S.floor);
+      S.ver=3;
+    }
     if(!S.ach) S.ach={};
-    if(typeof S.floor!=="number") S.floor=0;
+    if(typeof S.floor!=="number") S.floor=1;
+    if(typeof S.maxFloor!=="number") S.maxFloor=S.floor;
     if(!S.equip) S.equip={tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0};
     if(!S.rel) S.rel={};
     if(!S.rivals || !S.rivals.length) S.rivals=initRivals();
@@ -1802,7 +1894,7 @@ window.addEventListener("resize", fitViewport);
    ===================================================================== */
 function init(){
   if(!load()) S=freshState();
-  curFloor=S.floor||0; FLOOR=FLOORS[curFloor];
+  curFloor=S.floor||1; FLOOR=getFloor(curFloor);
   px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
   buildLayers();
   reveal(S.px,S.py); drawFog();
