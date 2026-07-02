@@ -218,6 +218,7 @@
     👥 <b>招募團隊</b>幫你跑案子賺被動收入；🔁 把舊 <b>作品迭代成續作</b> 提升分紅。<br>
     📱 經營 <b>社群粉絲</b>、接受 <b>雜誌訪問</b>、當 <b>大學客座教授</b>，名利雙收！<br>
     🏢 <b>工作室排名</b> 與各設計公司 PK，搶下 <b>頂客戶招標</b> 大案！<br>
+    🔮 Lv25 後可 <b>轉生</b>：重新開始但 <b>保留所有技能</b>，並獲永久 <b>傳承加成</b>！<br>
     🛒 用現金到商店買 <b>技能與裝備</b>；💬 和同事交流拉好感，專案更快。<br>
     🔧 地圖上的物件（工作站/列印機/咖啡機/投影機/獎盃）都能 <b>點擊使用並升級</b>。<br>
     📅 每天有不同 <b>狀態加成</b>、會發日薪、還有 <b>突發事件</b> 要你抉擇。<br>
@@ -584,6 +585,8 @@ const ACH = [
   {id:"prof",   em:"🎓", name:"客座教授",   desc:"完成 3 場大學演講",   chk:s=>(s.lectures||0)>=3},
   {id:"tender", em:"📑", name:"標王",       desc:"贏得一次頂客戶招標",  chk:s=>(s.tendersWon||0)>=1},
   {id:"studio1",em:"🏢", name:"業界龍頭",   desc:"工作室排名第一",      chk:s=>s.rivalStudios&&s.rivalStudios.length&&s.rivalStudios.every(r=>studioPower()>=r.power)},
+  {id:"reborn", em:"🔮", name:"設計師的傳承",desc:"第一次轉生",          chk:s=>(s.prestige||0)>=1},
+  {id:"reborn5",em:"🌌", name:"輪迴大師",   desc:"轉生 5 次",           chk:s=>(s.prestige||0)>=5},
   {id:"explore",em:"🗺️", name:"地圖探險家", desc:"探索 200 格地圖",    chk:s=>seenCount(s)>=200},
   {id:"gear",   em:"🧰", name:"工欲善其事", desc:"升級任一件裝備",     chk:s=>Object.values(s.equip||{}).some(v=>v>0)},
   {id:"bff",    em:"💞", name:"辦公室摯友", desc:"與同事好感達 100",   chk:s=>Object.values(s.rel||{}).some(v=>v>=100)},
@@ -614,6 +617,7 @@ function freshState(){
     city:"tpe", cityFloor:{}, cities:{tpe:true}, team:[],
     followers:0, lectures:0, interviews:0, tendersWon:0,
     rivalStudios:initStudios(), socialCd:0, interviewCd:0, lectureCd:0, tenderBids:{},
+    legacy:0, prestige:0,
     ach:{}, sound:true, visited2:false,
     equip:{tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0},
     rel:{}, rivals:initRivals(), compWins:0,
@@ -1110,7 +1114,7 @@ function makeQuest(npc){
   const goal = Math.floor((40 + diff*30) * (1+ (S.level-1)*0.12));
   const expR = Math.floor(expNeed(S.level)*(0.35+diff*0.22)*fb);
   const repR = Math.floor((6+diff*7) * (1+(S.level-1)*0.06) * fb);
-  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6) * fb * fameMult());
+  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6) * fb * fameMult() * legacyMult());
   const skR  = Math.floor(skillXpNeed(S.skills[npc.spec].lv)*(0.5+diff*0.3));
   return {
     npc:npc.id, npcName:npc.name, npcFace:npc.face,
@@ -1292,8 +1296,9 @@ function totalRoyalty(){ return (S.works||[]).reduce((a,w)=>a+w.royalty*(1+(w.aw
 /* ========================================================================
    progression
    ===================================================================== */
+function legacyMult(){ return 1 + (S.legacy||0)*0.02; }   // 傳承點數：每點 +2% 經驗/現金
 function gainExp(n){
-  S.exp+=n;
+  S.exp+=n*legacyMult();
   let need=expNeed(S.level);
   while(S.exp>=need){
     S.exp-=need; S.level++;
@@ -1796,6 +1801,8 @@ function openCareer(){
       <div class="ad">分紅 $${fmt(w.royalty*(1+(w.awards?w.awards.length:0)*0.5))}/秒</div></div></div>`).join("") || `<div class="noquest">還沒有作品，快去完成專案！</div>`;
   $("modal").innerHTML=`<h2>🏆 設計生涯</h2>
     <div class="offer">
+      <div class="row"><span>🔮 轉生次數</span><span>${S.prestige||0} 次</span></div>
+      <div class="row"><span>✨ 傳承點數</span><span style="color:var(--purple)">${fmt(S.legacy||0)}（經驗/現金 ×${legacyMult().toFixed(2)}）</span></div>
       <div class="row"><span>🖼️ 作品總數</span><span>${(S.works||[]).length}（🌟S級 ${S.sworks||0}）</span></div>
       <div class="row"><span>🥇 國際獲獎</span><span>${S.awardsWon||0} 座</span></div>
       <div class="row"><span>👑 年度設計師</span><span>${S.doyWins||0} 次</span></div>
@@ -1807,8 +1814,63 @@ function openCareer(){
       <button class="btn" onclick="openAwards()">🌍 報名國際大賽</button>
       <button class="btn sec" onclick="openPortfolio()">🖼️ 完整作品集</button>
     </div>
+    <button class="btn" style="margin-top:8px;background:linear-gradient(90deg,#b085ff,#ff85c0)" onclick="openRebirth()">🔮 轉生（保留技能＋傳承加成）</button>
     <button class="btn sec" style="margin-top:8px" onclick="closeModal()">關閉</button>`;
   $("overlay").style.display="flex";
+}
+/* ---------- 轉生 / 傳承（重新開始，保留技能與永久加成） ---------- */
+function rebirthGain(){
+  return Math.floor(S.level*2 + (S.rep||0)/50 + (S.awardsWon||0)*10 + (S.doyWins||0)*20
+    + (S.works||[]).length*2 + (S.followers||0)/5000 + (S.tendersWon||0)*5 + (S.maxFloor||1));
+}
+function canRebirth(){ return S.level>=25; }
+function openRebirth(){
+  sfx("click");
+  const gain=rebirthGain(), req=canRebirth();
+  const newMult=(1+((S.legacy||0)+gain)*0.02).toFixed(2);
+  $("modal").innerHTML=`<h2>🔮 轉生 · 設計師的傳承</h2>
+    <div class="say">轉生會 <b>重新開始</b>一段設計人生：等級、現金、聲望、樓層、作品、團隊、裝備、粉絲全部歸零，
+      但你會 <b>永久保留所有技能等級</b>，並獲得 <b>傳承點數</b> 帶來永久加成。越晚轉生、成就越高，傳承越豐厚！</div>
+    <div class="offer">
+      <div class="row"><span>本次可獲傳承點數</span><span style="color:var(--purple)">✨ +${fmt(gain)}</span></div>
+      <div class="row"><span>轉生後經驗/現金加成</span><span style="color:var(--gold)">×${newMult}</span></div>
+      <div class="row"><span>保留</span><span>全部技能 · 成就 · 傳承</span></div>
+      <div class="row"><span>轉生起始資金</span><span>💰$${fmt(((S.legacy||0)+gain)*500)}</span></div>
+    </div>
+    <div class="modalBtns">
+      <button class="btn sec" onclick="closeModal()">再想想</button>
+      ${req?`<button class="btn" onclick="doRebirth()">🔮 確定轉生</button>`:`<button class="btn" disabled style="filter:grayscale(.6) brightness(.7)">需 Lv25</button>`}
+    </div>`;
+  $("overlay").style.display="flex";
+}
+function doRebirth(){
+  if(!canRebirth()){ toast("需達 Lv25 才能轉生"); sfx("bad"); return; }
+  const gain=rebirthGain();
+  const keep={ skills:S.skills, legacy:(S.legacy||0)+gain, prestige:(S.prestige||0)+1,
+               ach:S.ach, sound:S.sound };
+  const fresh=freshState();
+  fresh.skills=keep.skills;              // 保留過去技能
+  fresh.legacy=keep.legacy; fresh.prestige=keep.prestige;
+  fresh.ach=keep.ach; fresh.sound=keep.sound;
+  fresh.cash=keep.legacy*500;            // 傳承起始資金
+  S=fresh;
+  closeModal(); sfx("rank");
+  const wrap=$("stageWrap"); wrap.style.opacity=0;
+  setTimeout(()=>{
+    curCity="tpe"; curFloor=1; FLOOR=getFloor("tpe",1);
+    S.px=FLOOR.start?FLOOR.start.x:3; S.py=FLOOR.start?FLOOR.start.y:14;
+    px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
+    path=[]; pendingNpc=null; pendingElev=false; pendingFac=null; lastZone="";
+    if(!S.daily) rollDaily();
+    buildLayers(); reveal(S.px,S.py); drawFog();
+    renderSkills(); renderTask(); updateHUD(); updateAchChip(); updateDayChip(); updateDayNight();
+    $("floorTxt").textContent=cityById(curCity).flag+" "+FLOOR.name;
+    logLines=[];
+    log(`🔮 第 ${S.prestige} 次轉生完成！傳承點數 ✨${fmt(S.legacy)}（經驗/現金 ×${legacyMult().toFixed(2)}），技能全數保留。`,"pu");
+    log("🌅 帶著過去的功力，重新踏上設計之路！","b");
+    toast(`🔮 轉生 ×${S.prestige}`);
+    checkAch(); save(); wrap.style.opacity=1;
+  }, 300);
 }
 function openPortfolio(){
   sfx("click");
@@ -2129,7 +2191,7 @@ function designerOfYear(){
    ===================================================================== */
 function updateHUD(){
   $("lvTxt").textContent=S.level;
-  $("rankTxt").textContent=rankName();
+  $("rankTxt").textContent=((S.prestige||0)>0?"✷"+S.prestige+" ":"")+rankName();
   $("repTxt").textContent=fmt(S.rep);
   $("salTxt").textContent=fmt(salary());
   $("cashTxt").textContent=fmt(S.cash);
@@ -2214,6 +2276,8 @@ function load(){
     if(typeof S.socialCd!=="number") S.socialCd=0;
     if(typeof S.interviewCd!=="number") S.interviewCd=0;
     if(typeof S.lectureCd!=="number") S.lectureCd=0;
+    if(typeof S.legacy!=="number") S.legacy=0;
+    if(typeof S.prestige!=="number") S.prestige=0;
     if(!S.equip) S.equip={tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0};
     if(!S.rel) S.rel={};
     if(!S.rivals || !S.rivals.length) S.rivals=initRivals();
