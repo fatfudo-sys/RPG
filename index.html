@@ -29,7 +29,9 @@
   #repChip b{color:var(--pink);}
   #salChip b{color:var(--grn);}
   #floorChip b{color:var(--blue);}
-  #soundChip,#achChip,#shopChip,#restChip,#compChip,#boardChip{cursor:pointer;}
+  #soundChip,#achChip,#shopChip,#restChip,#compChip,#boardChip,#fanChip,#worldChip,#teamChip,#bizChip,#careerChip,#dayChip{cursor:pointer;}
+  #fanChip b{color:var(--pink);}
+  #bizChip{background:linear-gradient(90deg,#16242a,#183038); border-color:#2a5a6a;}
   #shopChip{background:linear-gradient(90deg,#2a2416,#3a3218); border-color:#6a5a28;}
   #compChip{background:linear-gradient(90deg,#2a1622,#3a1830); border-color:#7a3a5a;}
   .bar{position:relative; width:120px; height:9px; border-radius:6px; background:#0c1016; overflow:hidden; border:1px solid var(--line);}
@@ -160,8 +162,10 @@
     <div class="chip" id="bagChip"><span>🎒</span><b>背包</b></div>
     <div class="chip" id="restChip"><span>😴</span><b>休息</b></div>
     <div class="chip" id="compChip"><span>🏁</span><b>競圖</b></div>
+    <div class="chip" id="fanChip"><span>📱</span><span><span class="lbl">粉絲</span> <b id="fanTxt">0</b></span></div>
     <div class="chip" id="worldChip"><span>✈️</span><b>巡迴</b></div>
     <div class="chip" id="teamChip"><span>👥</span><b>團隊</b></div>
+    <div class="chip" id="bizChip"><span>🏢</span><b>業界</b></div>
     <div class="chip" id="careerChip"><span>🏆</span><b>生涯</b></div>
     <div class="chip" id="boardChip"><span>📊</span><b>排行</b></div>
     <div class="chip" id="achChip"><span>🏅</span><b id="achTxt">0/12</b></div>
@@ -212,6 +216,8 @@
     🛗 搭電梯挑戰 <b>無限樓層</b>：等級越高解鎖越高樓層，難度與回報也越高！<br>
     ✈️ <b>世界巡迴</b>：到東京、柏林、舊金山…海外分公司接案，回報倍率更高！<br>
     👥 <b>招募團隊</b>幫你跑案子賺被動收入；🔁 把舊 <b>作品迭代成續作</b> 提升分紅。<br>
+    📱 經營 <b>社群粉絲</b>、接受 <b>雜誌訪問</b>、當 <b>大學客座教授</b>，名利雙收！<br>
+    🏢 <b>工作室排名</b> 與各設計公司 PK，搶下 <b>頂客戶招標</b> 大案！<br>
     🛒 用現金到商店買 <b>技能與裝備</b>；💬 和同事交流拉好感，專案更快。<br>
     🔧 地圖上的物件（工作站/列印機/咖啡機/投影機/獎盃）都能 <b>點擊使用並升級</b>。<br>
     📅 每天有不同 <b>狀態加成</b>、會發日薪、還有 <b>突發事件</b> 要你抉擇。<br>
@@ -573,6 +579,11 @@ const ACH = [
   {id:"team1",  em:"👥", name:"不再單打",   desc:"雇用第一位設計師",    chk:s=>(s.team||[]).length>=1},
   {id:"team5",  em:"🏢", name:"帶領團隊",   desc:"團隊達 5 人",         chk:s=>(s.team||[]).length>=5},
   {id:"sequel", em:"🔁", name:"系列作",     desc:"作品迭代到第 3 代",   chk:s=>(s.works||[]).some(w=>(w.gen||1)>=3)},
+  {id:"fans",   em:"📱", name:"設計網紅",   desc:"粉絲突破 10 萬",      chk:s=>(s.followers||0)>=100000},
+  {id:"press",  em:"📰", name:"媒體寵兒",   desc:"接受一次雜誌訪問",    chk:s=>(s.interviews||0)>=1},
+  {id:"prof",   em:"🎓", name:"客座教授",   desc:"完成 3 場大學演講",   chk:s=>(s.lectures||0)>=3},
+  {id:"tender", em:"📑", name:"標王",       desc:"贏得一次頂客戶招標",  chk:s=>(s.tendersWon||0)>=1},
+  {id:"studio1",em:"🏢", name:"業界龍頭",   desc:"工作室排名第一",      chk:s=>s.rivalStudios&&s.rivalStudios.length&&s.rivalStudios.every(r=>studioPower()>=r.power)},
   {id:"explore",em:"🗺️", name:"地圖探險家", desc:"探索 200 格地圖",    chk:s=>seenCount(s)>=200},
   {id:"gear",   em:"🧰", name:"工欲善其事", desc:"升級任一件裝備",     chk:s=>Object.values(s.equip||{}).some(v=>v>0)},
   {id:"bff",    em:"💞", name:"辦公室摯友", desc:"與同事好感達 100",   chk:s=>Object.values(s.rel||{}).some(v=>v>=100)},
@@ -601,6 +612,8 @@ function freshState(){
     seen:{}, ver:4,
     px:3, py:14, floor:1, maxFloor:1,
     city:"tpe", cityFloor:{}, cities:{tpe:true}, team:[],
+    followers:0, lectures:0, interviews:0, tendersWon:0,
+    rivalStudios:initStudios(), socialCd:0, interviewCd:0, lectureCd:0, tenderBids:{},
     ach:{}, sound:true, visited2:false,
     equip:{tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0},
     rel:{}, rivals:initRivals(), compWins:0,
@@ -611,6 +624,8 @@ function freshState(){
   };
 }
 function initRivals(){ return RIVAL_DEFS.map(r=>({id:r.id, face:r.face, name:r.name, rep:30+Math.floor(Math.random()*90)})); }
+const RIVAL_STUDIOS=["新銳設計所","形丰創意","極北設計","狂想工作室","次元 Design","無界設計","禾光設計事務所"];
+function initStudios(){ return RIVAL_STUDIOS.map(n=>({name:n, power:200+Math.floor(Math.random()*400)})); }
 function expNeed(lv){ return Math.floor(60 * Math.pow(1.28, lv-1)); }
 function skillXpNeed(lv){ return Math.floor(40 * Math.pow(1.35, lv-1)); }
 
@@ -1095,7 +1110,7 @@ function makeQuest(npc){
   const goal = Math.floor((40 + diff*30) * (1+ (S.level-1)*0.12));
   const expR = Math.floor(expNeed(S.level)*(0.35+diff*0.22)*fb);
   const repR = Math.floor((6+diff*7) * (1+(S.level-1)*0.06) * fb);
-  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6) * fb);
+  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6) * fb * fameMult());
   const skR  = Math.floor(skillXpNeed(S.skills[npc.spec].lv)*(0.5+diff*0.3));
   return {
     npc:npc.id, npcName:npc.name, npcFace:npc.face,
@@ -1537,6 +1552,7 @@ function runComp(skill){
 setInterval(()=>{
   if(!S || $("start").style.display!=="none") return;
   rivalsGain(2 + S.level*0.3);
+  for(const st of (S.rivalStudios||[])) st.power += 1 + Math.floor(S.level*0.4 + Math.random()*6);
   if(Math.random()<0.25){
     const ids=Object.keys(S.npcQuestReady||{});
     if(ids.length){
@@ -1645,10 +1661,12 @@ setInterval(()=>{
   if(!S || $("start").style.display!=="none") return;
   const inc=idleRate(facLv("desk"));
   if(inc>0) S.cash+=inc;
-  const roy=totalRoyalty();          // 熱賣作品被動分紅
+  const roy=totalRoyalty()*fameMult(); // 熱賣作品被動分紅（受知名度加成）
   if(roy>0) S.cash+=roy;
   const ti=teamIncome();             // 團隊產值
   if(ti>0) S.cash+=ti;
+  const si=socialIncome();           // 社群業配收入
+  if(si>0) S.cash+=si;
   const tr=trophyRate(facLv("trophy"))/10;
   if(tr>0) S.rep+=tr;
   S.dayClock=(S.dayClock||0)+1;
@@ -1869,7 +1887,167 @@ function upgradeEmp(i){
   sfx("level"); log(`📈 培訓 ${e.face}${e.name} → Lv${e.lv}（${e.role}）`,"b");
   updateHUD(); checkAch(); save(); openTeam();
 }
-function awardReady(id){ return (S.day||1) >= ((S.awardCd&&S.awardCd[id])||0); }
+
+/* ========================================================================
+   社群媒體 · 粉絲 · 雜誌訪問 · 大學演講
+   ===================================================================== */
+function fmtK(n){ n=Math.floor(n); if(n>=1e8) return (n/1e8).toFixed(1)+"億"; if(n>=1e4) return (n/1e4).toFixed(1)+"萬"; return fmt(n); }
+function fameMult(){ return 1 + Math.min(2.5, (S.followers||0)/40000); }   // 粉絲加成，最高 +250%
+function socialIncome(){ return Math.floor((S.followers||0)/500); }        // 業配/贊助被動收入
+function bestGrade(){ let g=0; for(const w of (S.works||[])) g=Math.max(g,gradeRank[w.grade]); return g; }
+function socialReady(){ return Date.now()>=(S.socialCd||0); }
+function socialCdLeft(){ return Math.max(0,Math.ceil(((S.socialCd||0)-Date.now())/1000)); }
+function gainFollowers(n,reason){ S.followers=(S.followers||0)+Math.max(0,Math.floor(n)); if(reason) log(reason,"p"); }
+function openSocial(){
+  sfx("click");
+  const rep=S.rep||0;
+  const canInt = (S.day||1)>=(S.interviewCd||0) && rep>=120;
+  const canLec = (S.day||1)>=(S.lectureCd||0) && (S.level>=15 || (S.awardsWon||0)>=1);
+  const title = (S.lectures||0)>=3 ? "客座教授 🎓" : (S.followers>=100000?"網紅設計師":"設計師");
+  $("modal").innerHTML=`<h2>📱 社群媒體 <span style="font-size:13px;color:var(--pink)">粉絲 ${fmtK(S.followers||0)}</span></h2>
+    <div class="offer">
+      <div class="row"><span>身分</span><span>${title}</span></div>
+      <div class="row"><span>知名度加成</span><span style="color:var(--gold)">現金 ×${fameMult().toFixed(2)}</span></div>
+      <div class="row"><span>業配收入</span><span>$${fmt(socialIncome())}/秒</span></div>
+      <div class="row"><span>雜誌訪問</span><span>${S.interviews||0} 次</span></div>
+      <div class="row"><span>大學演講</span><span>${S.lectures||0} 次</span></div>
+    </div>
+    <button class="btn" onclick="postSocial()" ${socialReady()?'':'disabled style="filter:grayscale(.6) brightness(.7)"'}>
+      📝 發文分享作品 ${socialReady()?'':'('+socialCdLeft()+'s)'}</button>
+    <button class="btn sec" style="margin-top:8px;${canInt?'':'opacity:.5'}" onclick="doInterview()">📰 接受雜誌訪問 ${canInt?'':(rep<120?'(需聲望120)':'(明日再訪)')}</button>
+    <button class="btn sec" style="margin-top:8px;${canLec?'':'opacity:.5'}" onclick="doLecture()">🎓 大學演講／客座教授 ${canLec?'':(S.level<15?'(需 Lv15)':'(今日已講)')}</button>
+    <button class="btn sec" style="margin-top:8px" onclick="closeModal()">關閉</button>`;
+  $("overlay").style.display="flex";
+}
+function postSocial(){
+  if(!socialReady()){ toast("先醞釀一下"); return; }
+  S.socialCd=Date.now()+7000;
+  const base=20 + (S.rep||0)*0.5 + bestGrade()*40 + (S.works||[]).length*3;
+  let gain=Math.floor(base*(0.6+Math.random()*1.2)); let viral="";
+  if(Math.random()<0.18){ gain*=Math.floor(5+Math.random()*6); viral=" 🔥爆紅！"; sfx("achieve"); }
+  else sfx("good");
+  gainFollowers(gain);
+  S.rep+=Math.max(1,Math.floor(gain/200));
+  log(`📝 發文分享作品，粉絲 +${fmtK(gain)}${viral}`, viral?"y":"p");
+  updateHUD(); checkAch(); save(); openSocial();
+}
+function doInterview(){
+  if((S.day||1)<(S.interviewCd||0) || (S.rep||0)<120){ toast("暫時無法受訪"); return; }
+  S.interviewCd=(S.day||1)+2; S.interviews=(S.interviews||0)+1;
+  const fol=Math.floor(2000+ (S.rep||0)*8 + (S.followers||0)*0.1);
+  const cash=Math.floor(salary()*0.8*fameMult()); const rep=Math.floor(20+S.level*2);
+  gainFollowers(fol); S.cash+=cash; S.rep+=rep;
+  sfx("achieve"); log(`📰 接受設計雜誌專訪！粉絲 +${fmtK(fol)}、💰$${fmt(cash)}、聲望 +${rep}`,"y");
+  toast("📰 登上雜誌封面！"); updateHUD(); checkAch(); save(); openSocial();
+}
+function doLecture(){
+  if((S.day||1)<(S.lectureCd||0) || (S.level<15 && (S.awardsWon||0)<1)){ toast("暫時無法演講"); return; }
+  S.lectureCd=(S.day||1)+1; S.lectures=(S.lectures||0)+1;
+  const cash=Math.floor(salary()*0.5); const rep=Math.floor(15+S.level*1.5); const fol=Math.floor(800+(S.rep||0)*3);
+  S.cash+=cash; S.rep+=rep; gainFollowers(fol);
+  let extra="";
+  if(Math.random()<0.4){ // 從學生中招募人才
+    if(!S.team) S.team=[];
+    const nm=TEAM_NAMES[Math.floor(Math.random()*TEAM_NAMES.length)];
+    const face=TEAM_FACES[Math.floor(Math.random()*TEAM_FACES.length)];
+    S.team.push({name:nm+"(學生)", face, lv:1, role:"實習設計師"});
+    extra=`，並收了得意門生 ${face}${nm} 加入團隊`;
+  }
+  sfx("rank"); log(`🎓 到大學演講／客座教授！💰$${fmt(cash)}、聲望 +${rep}、粉絲 +${fmtK(fol)}${extra}`,"pu");
+  toast((S.lectures>=3?"🎓 客座教授":"🎓 精彩演講")); updateHUD(); checkAch(); save(); openSocial();
+}
+
+/* ========================================================================
+   業界 · 工作室排名(公司 PK) · 頂客戶招標
+   ===================================================================== */
+function teamPower(){ return (S.team||[]).reduce((a,e)=>a+e.lv*20,0); }
+function studioPower(){ return Math.floor((S.rep||0) + (S.works||[]).length*10 + (S.awardsWon||0)*90 + (S.doyWins||0)*150 + teamPower() + (S.followers||0)/80 + S.level*15); }
+function openIndustry(){
+  sfx("click");
+  $("modal").innerHTML=`<h2>🏢 設計業界</h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:10px">你的工作室實力：<b style="color:var(--gold)">${fmt(studioPower())}</b>（聲望＋作品＋獲獎＋團隊＋粉絲）</div>
+    <div class="modalBtns"><button class="btn" onclick="openRanking()">🏆 工作室排名</button><button class="btn" onclick="openTenders()">📑 頂客戶招標</button></div>
+    <button class="btn sec" style="margin-top:8px" onclick="closeModal()">關閉</button>`;
+  $("overlay").style.display="flex";
+}
+function openRanking(){
+  sfx("click");
+  const all=[{name:"⭐ 你的工作室", power:studioPower(), me:true}, ...(S.rivalStudios||[]).map(s=>({name:s.name,power:s.power}))];
+  all.sort((a,b)=>b.power-a.power);
+  const rows=all.map((s,i)=>{
+    const medal=["🥇","🥈","🥉"][i]||("#"+(i+1));
+    return `<div class="achrow" style="${s.me?'border-color:#5aa9ff;background:#12203a':''}">
+      <div class="ae">${medal}</div>
+      <div style="flex:1"><div class="an">${s.name}</div><div class="ad">實力 ${fmt(s.power)}</div></div>
+      ${s.me?'<div class="tick">👈</div>':''}</div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>🏆 工作室排名</h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:8px">各設計公司同場較勁，衝上業界第一！</div>
+    <div class="achlist">${rows}</div>
+    <div class="modalBtns" style="margin-top:12px"><button class="btn sec" onclick="openIndustry()">← 返回</button><button class="btn" onclick="closeModal()">關閉</button></div>`;
+  $("overlay").style.display="flex";
+}
+function genTenders(){
+  const rng=mulberry32((S.day||1)*7919 + cityIndex(curCity)*131);
+  const ri=(a,b)=>Math.floor(rng()*(b-a+1))+a;
+  const BIG=["政府標案","跨國企業","車廠旗艦","奧運主場館","國際航空","科技巨頭","精品集團"];
+  const out=[];
+  for(let i=0;i<3;i++){
+    const [pn,pe]=PRODUCTS[ri(0,PRODUCTS.length-1)];
+    const client=BIG[ri(0,BIG.length-1)];
+    const prize=Math.floor(salary()*(2+i*1.5)*floorBonus(curFloor)*cityBonus(curCity));
+    const need=Math.floor(studioPower()*(0.8+i*0.5)+ri(0,300));
+    out.push({id:i, client, title:`${client}${pn}`, emoji:pe, prize, need});
+  }
+  return out;
+}
+function openTenders(){
+  sfx("click");
+  const day=S.day||1;
+  const ts=genTenders();
+  const rows=ts.map(t=>{
+    const key=day+"_"+curCity+"_"+t.id;
+    const done=(S.tenderBids||{})[key];
+    const fee=Math.floor(t.prize*0.08);
+    return `<div class="achrow ${done?'locked':''}">
+      <div class="ae">${t.emoji}</div>
+      <div style="flex:1"><div class="an">${t.title}</div>
+        <div class="ad">獎金 💰$${fmt(t.prize)} · 門檻實力 ${fmt(t.need)} · 投標費 $${fmt(fee)}</div></div>
+      ${done?'<div class="tick">✔</div>':`<button class="btn sec" style="width:auto;margin:0;padding:7px 10px" onclick="bidTender(${t.id})">投標</button>`}
+    </div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>📑 頂客戶招標 <span style="font-size:12px;color:var(--dim)">Day ${day}</span></h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:8px">與各大工作室競標頂級客戶專案，實力越高越容易得標。每案每天限投一次，隔日換新。</div>
+    <div class="achlist">${rows}</div>
+    <div class="modalBtns" style="margin-top:12px"><button class="btn sec" onclick="openIndustry()">← 返回</button><button class="btn" onclick="closeModal()">關閉</button></div>`;
+  $("overlay").style.display="flex";
+}
+function bidTender(id){
+  const day=S.day||1, ts=genTenders(), t=ts.find(x=>x.id===id); if(!t) return;
+  const key=day+"_"+curCity+"_"+t.id;
+  if(!S.tenderBids) S.tenderBids={};
+  if(S.tenderBids[key]){ toast("此案已投標"); return; }
+  const fee=Math.floor(t.prize*0.08);
+  if(S.cash<fee){ toast("投標費不足 💸"); sfx("bad"); return; }
+  S.cash-=fee; S.tenderBids[key]=true;
+  // win chance from studio power vs threshold + best rival
+  const rivalBest=Math.max(...(S.rivalStudios||[{power:0}]).map(s=>s.power));
+  const chance=Math.min(0.92, 0.15 + Math.max(0,(studioPower()-t.need))/(t.need+1)*0.5 + (studioPower()>rivalBest?0.15:0));
+  if(Math.random()<chance){
+    S.cash+=t.prize; S.rep+=Math.floor(40+S.level*3); S.tendersWon=(S.tendersWon||0)+1;
+    gainFollowers(Math.floor(t.prize/salary()*3000+1500));
+    addWork({name:t.title, emoji:t.emoji, grade:"A", day, selfMade:false, royalty:makeRoyalty("A",false), awards:[]});
+    sfx("rank"); log(`📑 得標！${t.emoji}「${t.title}」→ 💰$${fmt(t.prize)}、聲望大增、作品入列。`,"y");
+    toast("📑 成功得標！");
+  } else {
+    // rival wins
+    const rv=(S.rivalStudios||[])[Math.floor(Math.random()*(S.rivalStudios||[1]).length)];
+    if(rv) rv.power+=Math.floor(t.need*0.1);
+    sfx("bad"); log(`📑 「${t.title}」由對手工作室得標，殘念…（已投標，隔日換新案）`,"r");
+    toast("這次落標…");
+  }
+  updateHUD(); checkAch(); save(); openTenders();
+}
 function openAwards(){
   sfx("click");
   const fee=Math.floor(salary()*0.5);
@@ -1955,6 +2133,7 @@ function updateHUD(){
   $("repTxt").textContent=fmt(S.rep);
   $("salTxt").textContent=fmt(salary());
   $("cashTxt").textContent=fmt(S.cash);
+  { const f=$("fanTxt"); if(f) f.textContent=fmtK(S.followers||0); }
   $("expBar").firstElementChild.style.width=(S.exp/expNeed(S.level)*100)+"%";
   $("enBar").firstElementChild.style.width=(S.energy/maxEnergy()*100)+"%";
   updateSprintBtn();
@@ -2026,6 +2205,15 @@ function load(){
     if(!S.cityFloor) S.cityFloor={};
     if(!S.cities) S.cities={tpe:true};
     if(!Array.isArray(S.team)) S.team=[];
+    if(typeof S.followers!=="number") S.followers=0;
+    if(typeof S.lectures!=="number") S.lectures=0;
+    if(typeof S.interviews!=="number") S.interviews=0;
+    if(typeof S.tendersWon!=="number") S.tendersWon=0;
+    if(!Array.isArray(S.rivalStudios)||!S.rivalStudios.length) S.rivalStudios=initStudios();
+    if(!S.tenderBids) S.tenderBids={};
+    if(typeof S.socialCd!=="number") S.socialCd=0;
+    if(typeof S.interviewCd!=="number") S.interviewCd=0;
+    if(typeof S.lectureCd!=="number") S.lectureCd=0;
     if(!S.equip) S.equip={tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0};
     if(!S.rel) S.rel={};
     if(!S.rivals || !S.rivals.length) S.rivals=initRivals();
@@ -2094,6 +2282,8 @@ $("restChip").addEventListener("click", doRest);
 $("compChip").addEventListener("click", openComp);
 $("worldChip").addEventListener("click", openWorld);
 $("teamChip").addEventListener("click", openTeam);
+$("fanChip").addEventListener("click", openSocial);
+$("bizChip").addEventListener("click", openIndustry);
 $("careerChip").addEventListener("click", openCareer);
 $("boardChip").addEventListener("click", openBoard);
 $("goBtn").addEventListener("click", ()=>{
