@@ -256,6 +256,46 @@ const SKILLS = {
 };
 const SKILL_KEYS = Object.keys(SKILLS);
 
+/* ---------- 大學畢業 / 角色創建：6 大核心能力 (F..A) + 學派固有技能 ---------- */
+const STAT_DEF=[
+  {k:"stam",  em:"💪", name:"體力"},
+  {k:"spd",   em:"⚡", name:"速度"},
+  {k:"design",em:"✏️", name:"設計技巧"},
+  {k:"aes",   em:"🎨", name:"美感"},
+  {k:"eng",   em:"🔧", name:"工程能力"},
+  {k:"mkt",   em:"📊", name:"市場"},
+];
+const STAT_LETTERS=["F","E","D","C","B","A"];               // 1..6
+function LV(l){ return {F:1,E:2,D:3,C:4,B:5,A:6}[l]||1; }
+function letterOf(v){ return STAT_LETTERS[Math.max(0,Math.min(5,(v|0)-1))]; }
+function statVal(k){ return (S.stats&&S.stats[k])||1; }
+// st order: [體力,速度,設計技巧,美感,工程能力,市場]
+const SCHOOLS=[
+  {id:"art",     name:"國立造形藝術大學",       st:["D","C","B","A","E","E"], perk:"muse",      skill:"大師靈光",   sdesc:"展板視覺張力極高，行銷/BOSS 評分加成，易魅惑非專業評審。", style:"追求純粹美學與前瞻概念，教授讚嘆、工廠崩潰。"},
+  {id:"tech",    name:"科技工程大學工業設計系", st:["C","C","D","E","A","D"], perk:"tolerance", skill:"公差計算",   sdesc:"工程/採購 評分加成，降低量產開模失敗。",           style:"重度理工腦，圖醜但絕對拆得開、裝得回。"},
+  {id:"biz",     name:"老牌商業設計學院",       st:["C","B","C","C","D","A"], perk:"ppt",       skill:"PPT王牌",    sdesc:"業務/行銷 評分加成，任務現金 +15%。",              style:"市場導向，把普通塑膠殼包裝成爆款。"},
+  {id:"cyber",   name:"賽博龐克工坊大學",       st:["D","A","C","B","C","F"], perk:"speed",     skill:"快捷盲打",   sdesc:"設計速度大增，衝刺精力消耗減半。",                 style:"數位極致流，鍵盤敲得比心跳還快。"},
+  {id:"craft",   name:"實作派手工職人學院",     st:["A","D","C","C","B","E"], perk:"model",     skill:"模型大師",   sdesc:"工程/採購 評分加成，打樣更強。",                   style:"泡棉膩子FRP木工，相信雙手與砂紙。"},
+  {id:"avant",   name:"前衛概念實驗所",         st:["E","D","A","B","F","D"], perk:"story",     skill:"故事大師",   sdesc:"行銷/BOSS 評分加成，聲望獲得 +20%。",              style:"批判性設計與人類學，常搞出不能用的藝術品。"},
+  {id:"regional",name:"地方產業轉型學系",       st:["B","C","D","E","B","B"], perk:"factory",   skill:"工廠搏感情", sdesc:"與同事交流好感更高，改圖阻力減半。",               style:"深耕在地鐵工廠，接地氣、抗壓極高。"},
+  {id:"global",  name:"國際遊學快閃學院",       st:["E","C","B","B","F","B"], perk:"global",    skill:"國際視野",   sdesc:"海外機票 -40%，發文粉絲加成。",                    style:"審美洋化、外語強，但不懂本土製造。"},
+  {id:"eco",     name:"永續生態設計學系",       st:["C","D","C","C","C","C"], perk:"eco",       skill:"綠能循環",   sdesc:"各部門評分小幅加成，完成專案額外聲望。",           style:"竹纖維、咖啡渣、碳足跡的狂熱信徒。"},
+  {id:"night",   name:"夜間部極限生存學苑",     st:["A","B","D","D","D","D"], perk:"caffeine",  skill:"咖啡因免疫", sdesc:"精力回復加成，衝刺無視精力不足。",                 style:"半工半讀、退件煉獄，活下來的怪物。"},
+];
+function schoolById(id){ return SCHOOLS.find(s=>s.id===id); }
+function agiMult(){ return (1+(statVal("spd")-1)*0.06) * (S.perk==="speed"?1.2:1); }
+function sprintCost(){ return S.perk==="speed"?3:6; }
+function perkDept(key){
+  const p=S.perk;
+  if(p==="muse"&&(key==="mkt"||key==="boss")) return 1;
+  if(p==="tolerance"&&(key==="eng"||key==="proc")) return 1;
+  if(p==="ppt"&&(key==="sales"||key==="mkt")) return 1;
+  if(p==="model"&&(key==="eng"||key==="proc")) return 1;
+  if(p==="story"&&(key==="mkt"||key==="boss")) return 1;
+  if(p==="eco") return 0.6;
+  return 0;
+}
+
 /* ---------- quest flavour ---------- */
 const PRODUCTS = [
   ["滑鼠","🖱️"],["機械鍵盤","⌨️"],["筆記型電腦","💻"],["智慧手機","📱"],["降噪耳機","🎧"],
@@ -588,6 +628,7 @@ const ACH = [
   {id:"prof",   em:"🎓", name:"客座教授",   desc:"完成 3 場大學演講",   chk:s=>(s.lectures||0)>=3},
   {id:"tender", em:"📑", name:"標王",       desc:"贏得一次頂客戶招標",  chk:s=>(s.tendersWon||0)>=1},
   {id:"studio1",em:"🏢", name:"業界龍頭",   desc:"工作室排名第一",      chk:s=>s.rivalStudios&&s.rivalStudios.length&&s.rivalStudios.every(r=>studioPower()>=r.power)},
+  {id:"grad",   em:"🎓", name:"設計系畢業", desc:"從大學畢業入行",       chk:s=>!!s.school},
   {id:"reborn", em:"🔮", name:"設計師的傳承",desc:"第一次轉生",          chk:s=>(s.prestige||0)>=1},
   {id:"reborn5",em:"🌌", name:"輪迴大師",   desc:"轉生 5 次",           chk:s=>(s.prestige||0)>=5},
   {id:"love",   em:"💕", name:"辦公室戀情", desc:"交到男/女朋友",       chk:s=>!!s.partner},
@@ -625,6 +666,7 @@ function freshState(){
     rivalStudios:initStudios(), socialCd:0, interviewCd:0, lectureCd:0, tenderBids:{},
     legacy:0, prestige:0,
     partner:null, partnerName:null, partnerFace:null, bestPres:0,
+    school:null, stats:null, perk:null,
     ach:{}, sound:true, visited2:false,
     equip:{tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0},
     rel:{}, rivals:initRivals(), compWins:0,
@@ -1080,7 +1122,7 @@ function switchFloor(to){
   }, 280);
 }
 /* ---------- world tour / travel between cities ---------- */
-function travelCost(id){ return Math.floor(salary()*0.8*cityBonus(id)); }
+function travelCost(id){ return Math.floor(salary()*0.8*cityBonus(id)*(S.perk==="global"?0.6:1)); }
 function openWorld(){
   sfx("click");
   const rows=CITIES.map(c=>{
@@ -1139,7 +1181,8 @@ function makeQuest(npc){
   const goal = Math.floor((40 + diff*30) * (1+ (S.level-1)*0.12));
   const expR = Math.floor(expNeed(S.level)*(0.35+diff*0.22)*fb);
   const repR = Math.floor((6+diff*7) * (1+(S.level-1)*0.06) * fb);
-  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6) * fb * fameMult() * legacyMult());
+  const mktM=(1+(statVal("mkt")-1)*0.05)*(S.perk==="ppt"?1.15:1);   // 市場能力 + PPT王牌
+  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6) * fb * fameMult() * legacyMult() * mktM);
   const skR  = Math.floor(skillXpNeed(S.skills[npc.spec].lv)*(0.5+diff*0.3));
   return {
     npc:npc.id, npcName:npc.name, npcFace:npc.face,
@@ -1256,7 +1299,7 @@ function renderTask(){
       <div style="margin:4px 0 6px">${dots}</div>
       <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
       <div class="qmeta"><span>本階段 ${Math.floor(pct)}%</span><span>完成 💰$${fmt(q.rewards.cash*cashMult())} · 100% 分紅</span></div>
-      <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力研發！ <span style="font-size:11px">(⚡6)</span></button>
+      <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力研發！ <span style="font-size:11px">(⚡${sprintCost()})</span></button>
       <div style="font-size:11px;color:var(--dim);text-align:center;margin-top:6px">獨力完成每個階段，成品全歸你，分紅更高！</div>`;
   } else {
     const sk=S.skills[q.skill];
@@ -1265,22 +1308,25 @@ function renderTask(){
       <div class="qsub">${q.client} · ${diffStars(q.diff)} · 主技能 ${SKILLS[q.skill].em}${SKILLS[q.skill].name} Lv${sk.lv}</div>
       <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
       <div class="qmeta"><span>進度 ${Math.floor(pct)}%</span><span>💰$${fmt(q.rewards.cash*cashMult())} · ⭐${Math.floor(q.rewards.exp*xpMult())}</span></div>
-      <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力設計！ <span style="font-size:11px">(⚡6)</span></button>
+      <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力設計！ <span style="font-size:11px">(⚡${sprintCost()})</span></button>
       <div style="font-size:11px;color:var(--dim);text-align:center;margin-top:6px">技能越高，自動進度越快 · 也可按空白鍵</div>`;
   }
   updateSprintBtn();
 }
 function updateSprintBtn(){
   const b=$("sprintBtn"); if(!b) return;
-  b.disabled = S.energy<6;
-  b.style.opacity = S.energy<6?0.6:1;
+  const c=sprintCost(), blocked=(S.energy<c && S.perk!=="caffeine");
+  b.disabled = blocked;
+  b.style.opacity = blocked?0.6:1;
 }
 function curSkill(q){ return q.selfMade ? q.steps[q.step].skill : q.skill; }
 function sprint(){
-  if(!S.quest || S.energy<6) return;
-  S.energy-=6;
+  if(!S.quest) return;
+  const c=sprintCost();
+  if(S.energy<c && S.perk!=="caffeine") return;   // 咖啡因免疫：無視精力不足
+  S.energy=Math.max(0,S.energy-c);
   const sk=S.skills[curSkill(S.quest)];
-  const gain = (8*(1+sk.lv*0.12) + Math.random()*4)*sprintMult()*relSpeed(S.quest.npc)*coopMult()*buffMult()*(S.partner?1.12:1);
+  const gain = (8*(1+sk.lv*0.12) + Math.random()*4)*sprintMult()*relSpeed(S.quest.npc)*coopMult()*buffMult()*agiMult()*(S.partner?1.12:1);
   sfx("sprint");
   addProgress(gain, true);
   updateHUD();
@@ -1289,7 +1335,7 @@ setInterval(()=>{
   if(!S) return;
   if(S.quest){
     const sk=S.skills[curSkill(S.quest)];
-    addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(S.quest.npc)*coopMult()*buffMult()*(S.partner?1.12:1), false);
+    addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(S.quest.npc)*coopMult()*buffMult()*agiMult()*(S.partner?1.12:1), false);
   }
   if(S.energy<maxEnergy()){ S.energy=Math.min(maxEnergy(), S.energy+energyRegen()*dailyMult("regen")*fxMult("regen")); updateHUD(); }
 }, 240);
@@ -1343,8 +1389,12 @@ const DEPTS=[
 function deptTier(d,q){
   const sk=d.skills.reduce((a,k)=>a+S.skills[k].lv,0)/d.skills.length;
   let v=sk*1.1 - q.diff*1.3 + (Math.random()*4-1.2);
-  if(d.fame) v+=Math.log10((S.followers||0)+10);
-  if(d.boss) v+=(S.rep||0)/800 + coopLevel()/50;
+  v += (statVal("aes")-1)*0.2;                                  // 美感：全面加分
+  if(d.fame) v+=Math.log10((S.followers||0)+10) + (statVal("mkt")-1)*0.2;
+  if(d.boss) v+=(S.rep||0)/800 + coopLevel()/50 + (statVal("design")-1)*0.15;
+  if(d.key==="eng"||d.key==="proc") v+=(statVal("eng")-1)*0.25;
+  if(d.key==="sales"||d.key==="mkt") v+=(statVal("mkt")-1)*0.2;
+  v += perkDept(d.key);                                         // 固有技能
   return Math.max(0, Math.min(PRES.length-1, Math.round(3+v*0.35)));
 }
 /* ---------- 社交關係／辦公室戀愛 ---------- */
@@ -1365,7 +1415,7 @@ function completeQuest(){
   const selfBonus=self?1.6:1;
   const cash=Math.floor(q.rewards.cash*cashMult()*fxMult("cash")*dailyMult("cash")*P.mult*selfBonus);
   const exp =Math.floor(q.rewards.exp*xpMult()*fxMult("xp")*dailyMult("xp")*P.mult);
-  const rep =Math.floor(q.rewards.rep*P.mult*selfBonus);
+  const rep =Math.floor(q.rewards.rep*P.mult*selfBonus*(S.perk==="story"?1.2:1) + (S.perk==="eco"?5:0));
   S.cash+=cash; S.rep+=rep; S.tasksDone++;
   if(q.npc){ S.rel[q.npc]=Math.min(100,(S.rel[q.npc]||0)+8); }
   if(q.skill) gainSkill(q.skill, Math.floor(q.rewards.skill*xpMult()));
@@ -1498,8 +1548,8 @@ function speedMult(){ return 1 + eqLv('station')*0.10; }
 function sprintMult(){ return 1 + eqLv('tablet')*0.14; }
 function xpMult(){ return 1 + eqLv('software')*0.12; }
 function cashMult(){ return 1 + eqLv('notebook')*0.14; }
-function maxEnergy(){ return 100 + eqLv('chair')*20; }
-function energyRegen(){ return 0.6 + eqLv('coffee')*0.30; }
+function maxEnergy(){ return 100 + eqLv('chair')*20 + (statVal('stam')-1)*15; }
+function energyRegen(){ return 0.6 + eqLv('coffee')*0.30 + (statVal('stam')-1)*0.08 + (S.perk==='caffeine'?0.6:0); }
 function favor(id){ return Math.min(100, (S.rel&&S.rel[id])||0); }
 function relSpeed(id){ return 1 + favor(id)/100*0.6; }
 function coopLevel(){ const v=Object.values(S.rel||{}); if(!v.length) return 0; return v.reduce((a,b)=>a+Math.min(100,b),0)/v.length; }
@@ -1515,7 +1565,7 @@ function chatNpc(id){
   if(S.energy<4){ toast("😪 太累了"); sfx("bad"); log("😪 太累了，沒精神聊天，先休息吧。","r"); return; }
   S.energy-=4;
   const before=favor(id);
-  S.rel[id]=Math.min(100,(S.rel[id]||0)+7+(isSchoolTie(id)?2:0));   // 同窗更投緣
+  S.rel[id]=Math.min(100,(S.rel[id]||0)+7+(isSchoolTie(id)?2:0)+(S.perk==="factory"?4:0));   // 同窗/工廠搏感情
   sfx("good");
   log(`💬 和 ${n.name} 聊了聊，好感 +${favor(id)-before}（合作度 ${Math.round(coopLevel())}%）`,"p");
   updateHUD(); checkAch(); save();
@@ -1938,8 +1988,13 @@ function openCareer(){
     <div class="achrow"><div class="ae">${w.emoji}</div>
       <div style="flex:1"><div class="an">${w.name} ${w.selfMade?'🚀':''} <span style="color:${GRADES[w.grade].col}">${w.grade}</span> ${(w.awards||[]).join("")}</div>
       <div class="ad">分紅 $${fmt(w.royalty*(1+(w.awards?w.awards.length:0)*0.5))}/秒</div></div></div>`).join("") || `<div class="noquest">還沒有作品，快去完成專案！</div>`;
+  const sch=schoolById(S.school);
+  const statLine=STAT_DEF.map(d=>`${d.em}${d.name} <b style="color:${statColor(statVal(d.k))}">${letterOf(statVal(d.k))}</b>`).join("　");
   $("modal").innerHTML=`<h2>🏆 設計生涯</h2>
     <div class="offer">
+      <div class="row"><span>🎓 畢業學校</span><span>${sch?sch.name:(S.school==="self"?"自學出身":"—")}</span></div>
+      ${sch?`<div class="row"><span>固有技能</span><span style="color:var(--gold)">${sch.skill}</span></div>`:""}
+      <div class="row" style="font-size:11px;color:var(--dim)"><span></span><span>${statLine}</span></div>
       <div class="row"><span>🔮 轉生次數</span><span>${S.prestige||0} 次</span></div>
       <div class="row"><span>✨ 傳承點數</span><span style="color:var(--purple)">${fmt(S.legacy||0)}（經驗/現金 ×${legacyMult().toFixed(2)}）</span></div>
       <div class="row"><span>🖼️ 作品總數</span><span>${(S.works||[]).length}（🌟S級 ${S.sworks||0}）</span></div>
@@ -1986,11 +2041,12 @@ function doRebirth(){
   if(!canRebirth()){ toast("需達 Lv25 才能轉生"); sfx("bad"); return; }
   const gain=rebirthGain();
   const keep={ skills:S.skills, legacy:(S.legacy||0)+gain, prestige:(S.prestige||0)+1,
-               ach:S.ach, sound:S.sound };
+               ach:S.ach, sound:S.sound, school:S.school, stats:S.stats, perk:S.perk };
   const fresh=freshState();
   fresh.skills=keep.skills;              // 保留過去技能
   fresh.legacy=keep.legacy; fresh.prestige=keep.prestige;
   fresh.ach=keep.ach; fresh.sound=keep.sound;
+  fresh.school=keep.school; fresh.stats=keep.stats; fresh.perk=keep.perk;  // 保留學派出身
   fresh.cash=keep.legacy*500;            // 傳承起始資金
   S=fresh;
   closeModal(); sfx("rank");
@@ -2424,6 +2480,7 @@ function load(){
     if(typeof S.prestige!=="number") S.prestige=0;
     if(S.partner===undefined) S.partner=null;
     if(typeof S.bestPres!=="number") S.bestPres=0;
+    if(!S.school){ S.school="self"; S.stats={stam:3,spd:3,design:3,aes:3,eng:3,mkt:3}; S.perk=null; }  // 舊存檔：自學者(均衡D)
     if(!S.equip) S.equip={tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0};
     if(!S.rel) S.rel={};
     if(!S.rivals || !S.rivals.length) S.rivals=initRivals();
@@ -2497,9 +2554,45 @@ $("bizChip").addEventListener("click", openIndustry);
 $("careerChip").addEventListener("click", openCareer);
 $("boardChip").addEventListener("click", openBoard);
 $("goBtn").addEventListener("click", ()=>{
-  initAudio(); if(S) S.sound=S.sound;
+  initAudio(); sfx("elevator");
   $("start").style.display="none"; setTimeout(fitViewport,30);
-  sfx("elevator");
+  if(!S.school) openSchoolPick();   // 新遊戲：先選大學畢業校
 });
+/* ---------- 大學畢業 / 角色創建畫面 ---------- */
+function openSchoolPick(){
+  const rows=SCHOOLS.map(s=>{
+    const badges=STAT_DEF.map((d,i)=>`<span style="display:inline-block;min-width:20px;text-align:center;font-weight:800;color:${statColor(LV(s.st[i]))}">${s.st[i]}</span>`).join("");
+    return `<div class="achrow" style="align-items:flex-start;cursor:pointer" onclick="chooseSchool('${s.id}')">
+      <div style="flex:1">
+        <div class="an">🎓 ${s.name}</div>
+        <div class="ad" style="white-space:normal">${s.style}</div>
+        <div style="font-size:11px;margin-top:4px;display:flex;gap:8px;flex-wrap:wrap">${STAT_DEF.map((d,i)=>`<span>${d.em}${d.name} <b style="color:${statColor(LV(s.st[i]))}">${s.st[i]}</b></span>`).join("")}</div>
+        <div style="font-size:11px;margin-top:4px;color:var(--gold)">固有技能【${s.skill}】<span style="color:var(--dim)">${s.sdesc}</span></div>
+      </div>
+      <button class="btn sec" style="width:auto;margin:0;padding:8px 12px">選擇</button></div>`;
+  }).join("");
+  $("modal").innerHTML=`<h2>🎓 大學畢業 · 選擇你的母校</h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:10px">每所學校有不同的能力側重與固有技能（F=1…A=6）。畢業後帶著這身本事踏入設計中心！</div>
+    <div class="achlist">${rows}</div>`;
+  $("overlay").style.display="flex";
+}
+function statColor(v){ return ["#ff6b6b","#d98a6a","#8b96a8","#5aa9ff","#5cd6a0","#ffce54"][Math.max(0,Math.min(5,v-1))]; }
+function chooseSchool(id){
+  const s=schoolById(id); if(!s) return;
+  S.school=id; S.perk=s.perk;
+  S.stats={ stam:LV(s.st[0]), spd:LV(s.st[1]), design:LV(s.st[2]), aes:LV(s.st[3]), eng:LV(s.st[4]), mkt:LV(s.st[5]) };
+  // 起始技能等級由能力值決定
+  S.skills.sketch.lv  = Math.max(1,S.stats.design);
+  S.skills.ux.lv      = Math.max(1,S.stats.design);
+  S.skills.render.lv  = Math.max(1,S.stats.aes);
+  S.skills.cad.lv     = Math.max(1,S.stats.eng);
+  S.skills.material.lv= Math.max(1,S.stats.eng);
+  S.skills.present.lv = Math.max(1,S.stats.mkt);
+  S.energy=maxEnergy();
+  closeModal(); sfx("achieve");
+  renderSkills(); updateHUD(); checkAch(); save();
+  log(`🎓 你從「${s.name}」畢業了！固有技能【${s.skill}】覺醒。`,"pu");
+  toast(`🎓 ${s.name} 畢業！`);
+}
 init();
 </script>
