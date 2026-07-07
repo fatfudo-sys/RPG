@@ -218,6 +218,9 @@
     👥 <b>招募團隊</b>幫你跑案子賺被動收入；🔁 把舊 <b>作品迭代成續作</b> 提升分紅。<br>
     📱 經營 <b>社群粉絲</b>、接受 <b>雜誌訪問</b>、當 <b>大學客座教授</b>，名利雙收！<br>
     🏢 <b>工作室排名</b> 與各設計公司 PK，搶下 <b>頂客戶招標</b> 大案！<br>
+    💕 <b>辦公室戀愛</b>：和同事/同學/學長姐培養好感，告白交往一起打拼！<br>
+    📣 完成設計要 <b>發表會</b>：行銷/業務/工程/採購/BOSS 評分（F→SSSSS），
+    上市看 <b>三個月銷售</b>；爆紅會被 🐒 山寨，不更新就越賣越少！<br>
     🔮 Lv25 後可 <b>轉生</b>：重新開始但 <b>保留所有技能</b>，並獲永久 <b>傳承加成</b>！<br>
     🛒 用現金到商店買 <b>技能與裝備</b>；💬 和同事交流拉好感，專案更快。<br>
     🔧 地圖上的物件（工作站/列印機/咖啡機/投影機/獎盃）都能 <b>點擊使用並升級</b>。<br>
@@ -587,6 +590,9 @@ const ACH = [
   {id:"studio1",em:"🏢", name:"業界龍頭",   desc:"工作室排名第一",      chk:s=>s.rivalStudios&&s.rivalStudios.length&&s.rivalStudios.every(r=>studioPower()>=r.power)},
   {id:"reborn", em:"🔮", name:"設計師的傳承",desc:"第一次轉生",          chk:s=>(s.prestige||0)>=1},
   {id:"reborn5",em:"🌌", name:"輪迴大師",   desc:"轉生 5 次",           chk:s=>(s.prestige||0)>=5},
+  {id:"love",   em:"💕", name:"辦公室戀情", desc:"交到男/女朋友",       chk:s=>!!s.partner},
+  {id:"ss5",    em:"🌟", name:"五星神作",   desc:"發表獲得 SSSSS 總評",  chk:s=>(s.bestPres||0)>=9},
+  {id:"viral",  em:"🔥", name:"現象級爆紅", desc:"作品達到爆紅",         chk:s=>(s.works||[]).some(w=>w.viral)},
   {id:"explore",em:"🗺️", name:"地圖探險家", desc:"探索 200 格地圖",    chk:s=>seenCount(s)>=200},
   {id:"gear",   em:"🧰", name:"工欲善其事", desc:"升級任一件裝備",     chk:s=>Object.values(s.equip||{}).some(v=>v>0)},
   {id:"bff",    em:"💞", name:"辦公室摯友", desc:"與同事好感達 100",   chk:s=>Object.values(s.rel||{}).some(v=>v>=100)},
@@ -618,6 +624,7 @@ function freshState(){
     followers:0, lectures:0, interviews:0, tendersWon:0,
     rivalStudios:initStudios(), socialCd:0, interviewCd:0, lectureCd:0, tenderBids:{},
     legacy:0, prestige:0,
+    partner:null, partnerName:null, partnerFace:null, bestPres:0,
     ach:{}, sound:true, visited2:false,
     equip:{tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0},
     rel:{}, rivals:initRivals(), compWins:0,
@@ -1158,22 +1165,57 @@ function openNpc(n){
   body += `<div class="modalBtns" style="margin-top:10px">
       <button class="btn sec" onclick="chatNpc('${n.id}')">💬 交流 (⚡4)</button>
       <button class="btn sec" onclick="giftNpc('${n.id}')">🎁 送禮 ($${fmt(giftCost(n.id))})</button>
-    </div>
-    <button class="btn sec" style="margin-top:8px" onclick="closeModal()">關閉</button>`;
+    </div>`;
+  // 辦公室戀愛
+  if(S.partner===n.id){
+    body += `<div class="modalBtns" style="margin-top:8px">
+        <button class="btn" style="background:linear-gradient(90deg,#ff85c0,#ff6b6b)" onclick="dateNpc('${n.id}')">💑 約會</button>
+        <button class="btn sec" onclick="breakup()">💔 分手</button></div>`;
+  } else if(favor(n.id)>=80){
+    body += `<button class="btn" style="margin-top:8px;background:linear-gradient(90deg,#ff85c0,#b085ff)" onclick="confess('${n.id}')">💕 告白 ${S.partner?'（將更換對象）':''}</button>`;
+  }
+  body += `<button class="btn sec" style="margin-top:8px" onclick="closeModal()">關閉</button>`;
   $("modal").innerHTML = body;
   $("overlay").style.display="flex";
+}
+function confess(id){
+  const n=findNpc(id); if(!n) return;
+  const f=favor(id);
+  if(f<80){ toast("好感不足，先多交流"); sfx("bad"); return; }
+  const chance=Math.min(0.95, 0.35+(f-80)/20*0.6);
+  if(Math.random()<chance){
+    S.partner=id; S.partnerName=n.name; S.partnerFace=n.face; S.rel[id]=100;
+    sfx("achieve"); log(`💕 你和 ${n.face}${n.name}（${socialTie(id)}）正式交往了！`,"p"); toast("💕 戀愛成立！");
+  } else {
+    S.rel[id]=Math.max(0,f-12); sfx("bad");
+    log(`💔 ${n.name} 婉拒了你的告白…先當朋友吧。`,"r"); toast("被發好人卡…");
+  }
+  updateHUD(); checkAch(); save(); openNpc(n);
+}
+function dateNpc(id){
+  if(S.partner!==id) return;
+  S.energy=maxEnergy(); setFx("speed",1.3,25); S.rep+=6;
+  sfx("good"); log(`💑 和 ${findNpc(id)?findNpc(id).name:'另一半'} 約會，精力全滿、幹勁十足（設計加速）！`,"p");
+  updateHUD(); save(); const n=findNpc(id); if(n) openNpc(n);
+}
+function breakup(){
+  if(!S.partner) return;
+  const n=findNpc(S.partner);
+  log(`💔 你和 ${n?n.name:'對象'} 分手了。`,"r"); sfx("bad");
+  S.partner=null; S.partnerName=null; S.partnerFace=null;
+  updateHUD(); save(); if(n) openNpc(n);
 }
 function npcHeader(n){
   return `<div class="who"><div class="face">${n.face}</div>
     <div><div class="nm">${n.name}</div><div class="role">${n.role}</div></div></div>`;
 }
 function relBlock(id){
-  const f=favor(id);
+  const f=favor(id), tie=socialTie(id), partner=(S.partner===id);
   return `<div style="margin-bottom:12px">
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:3px">
-      <span>❤️ 好感度</span><span>${f}/100 ${f>=100?'💞 摯友':''}</span></div>
+      <span>❤️ 好感度 · <span style="color:#7fb0ff">${tie}</span></span><span>${f}/100 ${partner?'💑 交往中':(f>=100?'💞 摯友':'')}</span></div>
     <div class="bar" style="height:10px"><i style="width:${f}%;background:linear-gradient(90deg,#ff85c0,#ff6b6b)"></i></div>
-    <div style="font-size:11px;color:var(--dim);margin-top:4px">好感越高，其專案進度越快（目前 +${Math.round(f/100*60)}%）</div>
+    <div style="font-size:11px;color:var(--dim);margin-top:4px">好感越高，其專案進度越快（目前 +${Math.round(f/100*60)}%）${isSchoolTie(id)?' · 同窗情誼，交流更投緣':''}</div>
   </div>`;
 }
 function offerBlock(q){
@@ -1238,7 +1280,7 @@ function sprint(){
   if(!S.quest || S.energy<6) return;
   S.energy-=6;
   const sk=S.skills[curSkill(S.quest)];
-  const gain = (8*(1+sk.lv*0.12) + Math.random()*4)*sprintMult()*relSpeed(S.quest.npc)*coopMult()*buffMult();
+  const gain = (8*(1+sk.lv*0.12) + Math.random()*4)*sprintMult()*relSpeed(S.quest.npc)*coopMult()*buffMult()*(S.partner?1.12:1);
   sfx("sprint");
   addProgress(gain, true);
   updateHUD();
@@ -1247,7 +1289,7 @@ setInterval(()=>{
   if(!S) return;
   if(S.quest){
     const sk=S.skills[curSkill(S.quest)];
-    addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(S.quest.npc)*coopMult()*buffMult(), false);
+    addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(S.quest.npc)*coopMult()*buffMult()*(S.partner?1.12:1), false);
   }
   if(S.energy<maxEnergy()){ S.energy=Math.min(maxEnergy(), S.energy+energyRegen()*dailyMult("regen")*fxMult("regen")); updateHUD(); }
 }, 240);
@@ -1278,38 +1320,112 @@ function renderTaskBarOnly(){
   if(meta) meta.firstElementChild.textContent="進度 "+Math.floor(pct)+"%";
 }
 const GRADES={S:{mult:1.7,stars:"⭐⭐⭐",col:"#ffce54"},A:{mult:1.35,stars:"⭐⭐",col:"#5cd6a0"},B:{mult:1.1,stars:"⭐",col:"#5aa9ff"},C:{mult:0.9,stars:"—",col:"#8b96a8"}};
+/* ---------- 發表會：多部門評分 F→SSSSS ---------- */
+const PRES=[
+  {g:"F",    mult:0.4, col:"#ff6b6b"},
+  {g:"D",    mult:0.6, col:"#d98a6a"},
+  {g:"C",    mult:0.85,col:"#8b96a8"},
+  {g:"B",    mult:1.1, col:"#5aa9ff"},
+  {g:"A",    mult:1.4, col:"#5cd6a0"},
+  {g:"S",    mult:1.9, col:"#ffce54"},
+  {g:"SS",   mult:2.6, col:"#ffd76a"},
+  {g:"SSS",  mult:3.6, col:"#ff9f43"},
+  {g:"SSSS", mult:4.8, col:"#ff85c0"},
+  {g:"SSSSS",mult:6.5, col:"#b085ff"},
+];
+const DEPTS=[
+  {key:"mkt",   em:"📣", name:"行銷",  skills:["present"],          fame:true},
+  {key:"sales", em:"💼", name:"業務",  skills:["present","ux"]},
+  {key:"eng",   em:"🔧", name:"工程",  skills:["cad","material"]},
+  {key:"proc",  em:"📦", name:"採購",  skills:["material"]},
+  {key:"boss",  em:"👔", name:"BOSS",  skills:SKILL_KEYS,           boss:true},
+];
+function deptTier(d,q){
+  const sk=d.skills.reduce((a,k)=>a+S.skills[k].lv,0)/d.skills.length;
+  let v=sk*1.1 - q.diff*1.3 + (Math.random()*4-1.2);
+  if(d.fame) v+=Math.log10((S.followers||0)+10);
+  if(d.boss) v+=(S.rep||0)/800 + coopLevel()/50;
+  return Math.max(0, Math.min(PRES.length-1, Math.round(3+v*0.35)));
+}
+/* ---------- 社交關係／辦公室戀愛 ---------- */
+const TIES=["同事","大學同學","學長","學弟妹","業界前輩","健身夥伴"];
+function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
+function socialTie(id){ return TIES[hashStr(String(id))%TIES.length]; }
+function isSchoolTie(id){ const t=socialTie(id); return t==="大學同學"||t==="學長"||t==="學弟妹"; }
 function completeQuest(){
   const q=S.quest; S.quest=null;
   const self=!!q.selfMade;
-  const gradeSkillLv = self ? Math.round(q.steps.reduce((a,s)=>a+S.skills[s.skill].lv,0)/q.steps.length) : S.skills[q.skill].lv;
-  const score = gradeSkillLv - q.diff*2 + favor(q.npc)/25 + coopLevel()/40 + (self?2:0) + Math.random()*3;
-  const grade = score>6?"S": score>3?"A": score>0?"B":"C";
-  const g=GRADES[grade];
-  const selfBonus = self?1.6:1;
-  const cash=Math.floor(q.rewards.cash*cashMult()*fxMult("cash")*dailyMult("cash")*g.mult*selfBonus);
-  const exp =Math.floor(q.rewards.exp*xpMult()*fxMult("xp")*dailyMult("xp")*g.mult);
-  const rep =Math.floor(q.rewards.rep*g.mult*selfBonus);
-  S.cash += cash; S.rep += rep; S.tasksDone++;
+  // 各部門發表評分
+  const reviews=DEPTS.map(d=>({d, t:deptTier(d,q)}));
+  const overallT=Math.round(reviews.reduce((a,r)=>a+r.t,0)/reviews.length);
+  const P=PRES[overallT];
+  S.bestPres=Math.max(S.bestPres||0, overallT);
+  const grade = overallT<=2?"C" : overallT===3?"B" : overallT===4?"A" : "S";
   if(grade==="S") S.sworks=(S.sworks||0)+1;
+  const selfBonus=self?1.6:1;
+  const cash=Math.floor(q.rewards.cash*cashMult()*fxMult("cash")*dailyMult("cash")*P.mult*selfBonus);
+  const exp =Math.floor(q.rewards.exp*xpMult()*fxMult("xp")*dailyMult("xp")*P.mult);
+  const rep =Math.floor(q.rewards.rep*P.mult*selfBonus);
+  S.cash+=cash; S.rep+=rep; S.tasksDone++;
   if(q.npc){ S.rel[q.npc]=Math.min(100,(S.rel[q.npc]||0)+8); }
   if(q.skill) gainSkill(q.skill, Math.floor(q.rewards.skill*xpMult()));
   rivalsGain(q.rewards.rep*0.5);
-  // add to portfolio (熱賣分紅來源)
-  addWork({name:q.title, emoji:q.emoji, grade, day:S.day||1, selfMade:self,
-           royalty:makeRoyalty(grade,self), awards:[]});
-  const tag = self?'<b style="color:var(--purple)">[自主研發]</b> ':'';
-  log(`✅ 完成 ${tag}${q.emoji}「${q.title}」<b style="color:${g.col}">[${grade}級 ${g.stars}]</b> → 💰$${fmt(cash)} 🏆+${rep} ⭐+${exp}`,"g");
-  floatText(grade+" 級 完成!", g.col, 24); sfx(self?"rank":"complete");
+  // 上市：建立含銷售生命週期的作品
+  const viral=overallT>=5;
+  const sales=Math.floor(salary()/14 * P.mult * fameMult() * (self?1.3:1))+100;
+  const work={name:q.title, emoji:q.emoji, grade, presGrade:P.g, day:S.day||1, selfMade:self,
+    sales, royalty:Math.floor(sales/300)+1, month:0, copycats:0, viral, awards:[]};
+  addWork(work);
   if(Math.random()<0.24){ const keys=Object.keys(ITEMS); const k=keys[Math.floor(Math.random()*keys.length)]; addItem(k,1); log(`🎁 掉落道具：${ITEMS[k].em}${ITEMS[k].name}！（背包可用）`,"y"); }
+  const tag=self?'<b style="color:var(--purple)">[自主研發]</b> ':'';
+  log(`📣 發表 ${tag}${q.emoji}「${q.title}」總評 <b style="color:${P.col}">${P.g}</b> → 💰$${fmt(cash)} 🏆+${rep} ⭐+${exp}${viral?' 🔥爆紅!':''}`, viral?"y":"g");
+  floatText(P.g+" 發表!", P.col, 24); sfx(viral?"rank":"complete");
   gainExp(exp);
+  showPresentation(q, reviews, P, {cash,rep,exp}, work);
   renderTask(); drawNpcs(); updateHUD(); checkAch(); save();
+}
+function showPresentation(q, reviews, P, rw, work){
+  const rows=reviews.map(r=>{ const pg=PRES[r.t];
+    return `<div class="achrow"><div class="ae">${r.d.em}</div>
+      <div style="flex:1"><div class="an">${r.d.name}部</div></div>
+      <div style="font-weight:900;font-size:18px;color:${pg.col}">${pg.g}</div></div>`; }).join("");
+  const base=work.sales, f=[Math.floor(base*1.2),Math.floor(base*0.96),Math.floor(base*0.77)], mx=Math.max(...f,1);
+  const bars=f.map((v,i)=>`<div style="flex:1;text-align:center">
+     <div style="height:64px;display:flex;align-items:flex-end;justify-content:center">
+       <div style="width:58%;height:${Math.max(6,Math.round(v/mx*100))}%;background:linear-gradient(180deg,#5cd6a0,#5aa9ff);border-radius:4px 4px 0 0"></div></div>
+     <div style="font-size:11px;color:var(--dim);margin-top:4px">第 ${i+1} 月</div>
+     <div style="font-size:12px;font-weight:700">$${fmt(v)}</div></div>`).join("");
+  $("modal").innerHTML=`<h2>📣 設計發表會</h2>
+    <div style="font-size:13px;margin-bottom:8px">${work.emoji} <b>${q.title}</b> — 各部門評分</div>
+    <div class="achlist">${rows}</div>
+    <div style="text-align:center;margin:12px 0">總評　<b style="font-size:28px;color:${P.col}">${P.g}</b>${work.viral?'　🔥爆紅！':''}</div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:4px">📈 開賣三個月預估銷售</div>
+    <div style="display:flex;gap:8px;align-items:flex-end;background:#0e131c;border:1px solid var(--line);border-radius:12px;padding:10px">${bars}</div>
+    <div class="say" style="margin-top:10px">💰$${fmt(rw.cash)} · 🏆+${rw.rep} · ⭐+${rw.exp}${work.viral?'<br>🐒 爆紅易招山寨品！記得到作品集用 🔁 迭代更新，否則銷量會逐月下滑。':'<br>💡 產品不更新，銷量會逐月衰退，記得迭代。'}</div>
+    <button class="btn" onclick="closeModal()">收下 🎉</button>`;
+  $("overlay").style.display="flex";
 }
 function makeRoyalty(grade, self){
   const gf={C:0.3,B:0.7,A:1.3,S:2.2}[grade]||0.5;
   return Math.floor(salary()/500 * gf * (self?1.8:1)) + 1;
 }
-function addWork(w){ if(!S.works) S.works=[]; w.gen=w.gen||1; w.baseName=w.name; S.works.unshift(w); if(S.works.length>30) S.works.pop(); }
+function addWork(w){
+  if(!S.works) S.works=[];
+  w.gen=w.gen||1; w.baseName=w.name;
+  if(w.sales==null) w.sales=(w.royalty||1)*300;   // 為外包/舊作補上銷售
+  w.month=w.month||0; w.copycats=w.copycats||0;
+  S.works.unshift(w); if(S.works.length>30) S.works.pop();
+}
 function totalRoyalty(){ return (S.works||[]).reduce((a,w)=>a+w.royalty*(1+(w.awards?w.awards.length:0)*0.5),0); }
+/* 每月銷售演變：新品先衝高再衰退，山寨越多跌越快；不更新就越賣越少 */
+function stepWorkSales(w){
+  w.month=(w.month||0)+1;
+  if((w.viral || w.sales>salary()) && Math.random()<0.35){ w.copycats=(w.copycats||0)+1; w._copyNew=true; }
+  let factor = w.month<=1 ? 1.18 : (0.85 - (w.copycats||0)*0.06);
+  factor=Math.max(0.12, factor);
+  w.sales=Math.floor((w.sales||0)*factor);
+  w.royalty=Math.floor(w.sales/300)+(w.awards?w.awards.length:0);
+}
 
 /* ========================================================================
    progression
@@ -1399,7 +1515,7 @@ function chatNpc(id){
   if(S.energy<4){ toast("😪 太累了"); sfx("bad"); log("😪 太累了，沒精神聊天，先休息吧。","r"); return; }
   S.energy-=4;
   const before=favor(id);
-  S.rel[id]=Math.min(100,(S.rel[id]||0)+7);
+  S.rel[id]=Math.min(100,(S.rel[id]||0)+7+(isSchoolTie(id)?2:0));   // 同窗更投緣
   sfx("good");
   log(`💬 和 ${n.name} 聊了聊，好感 +${favor(id)-before}（合作度 ${Math.round(coopLevel())}%）`,"p");
   updateHUD(); checkAch(); save();
@@ -1706,6 +1822,11 @@ function newDay(){
   const wage=Math.floor(salary()/30);
   S.cash+=wage;
   rollDaily();
+  // 產品每月銷售演變（山寨/衰退）
+  for(const w of (S.works||[])){
+    stepWorkSales(w);
+    if(w._copyNew){ delete w._copyNew; log(`🐒 「${w.name}」爆紅引來山寨品（山寨數 ${w.copycats}），銷量開始下滑！`,"r"); }
+  }
   log(`🌅 第 ${S.day} 天！領到日薪 +$${fmt(wage)}｜今日狀態：${S.daily.em}${S.daily.name}（${S.daily.desc}）`,"y");
   toast(`🌅 Day ${S.day} · ${S.daily.em}${S.daily.name}`); sfx("level");
   checkAch(); save();
@@ -1894,9 +2015,11 @@ function openPortfolio(){
   sfx("click");
   const rows=(S.works||[]).map((w,i)=>{
     const cost=iterateCost(w), afford=S.cash>=cost;
+    const trend=(w.month||0)<=1?'📈':'📉';
+    const copy=(w.copycats||0)>0?` 🐒×${w.copycats}`:'';
     return `<div class="achrow"><div class="ae">${w.emoji}</div>
-      <div style="flex:1"><div class="an">${w.name} ${w.selfMade?'🚀':''} <span style="color:${GRADES[w.grade].col}">${w.grade}級</span> ${(w.gen||1)>1?'<span style="color:var(--purple)">Gen'+w.gen+'</span>':''} ${(w.awards||[]).join("")}</div>
-      <div class="ad">Day ${w.day} · 分紅 $${fmt(w.royalty*(1+(w.awards?w.awards.length:0)*0.5))}/秒</div></div>
+      <div style="flex:1"><div class="an">${w.name} ${w.selfMade?'🚀':''} <span style="color:${GRADES[w.grade].col}">${w.grade}級</span> ${w.presGrade&&w.presGrade!==w.grade?'<span style="color:var(--gold)">'+w.presGrade+'</span>':''} ${(w.gen||1)>1?'<span style="color:var(--purple)">Gen'+w.gen+'</span>':''} ${(w.awards||[]).join("")}</div>
+      <div class="ad">${trend} 月銷 $${fmt(w.sales||0)} · 分紅 $${fmt(w.royalty*(1+(w.awards?w.awards.length:0)*0.5))}/秒${copy}</div></div>
       <button class="btn sec" style="width:auto;margin:0;padding:6px 9px;font-size:12px;${afford?'':'opacity:.5'}" onclick="iterateWork(${i})">🔁 迭代<br>$${fmt(cost)}</button></div>`;
   }).join("") || `<div class="noquest">目前作品集是空的。</div>`;
   $("modal").innerHTML=`<h2>🖼️ 作品集 <span style="font-size:13px;color:var(--dim)">(${(S.works||[]).length})</span></h2>
@@ -1914,11 +2037,14 @@ function iterateWork(i){
   S.cash-=cost;
   w.gen=(w.gen||1)+1;
   if(gradeRank[w.grade]<3){ const order=["C","B","A","S"]; w.grade=order[gradeRank[w.grade]+1]; if(w.grade==="S") S.sworks=(S.sworks||0)+1; }
-  w.royalty=Math.floor(w.royalty*1.4)+1;
+  // 重新上市：清空山寨、銷量回升
+  w.month=0; w.copycats=0;
+  w.sales=Math.floor((w.sales||w.royalty*300)*1.6)+2000;
+  w.royalty=Math.floor(w.sales/300)+1;
   if(!w.baseName) w.baseName=w.name;
   const roman=["","","II","III","IV","V","VI","VII","VIII","IX","X"][w.gen]||("Gen"+w.gen);
   w.name=w.baseName+" "+roman;
-  sfx("level"); log(`🔁 推出續作 ${w.emoji}「${w.name}」→ ${w.grade}級，分紅提升！`,"g");
+  sfx("level"); log(`🔁 推出續作 ${w.emoji}「${w.name}」→ ${w.grade}級，銷量重振、山寨歸零！`,"g");
   updateHUD(); checkAch(); save(); openPortfolio();
 }
 
@@ -2296,6 +2422,8 @@ function load(){
     if(typeof S.lectureCd!=="number") S.lectureCd=0;
     if(typeof S.legacy!=="number") S.legacy=0;
     if(typeof S.prestige!=="number") S.prestige=0;
+    if(S.partner===undefined) S.partner=null;
+    if(typeof S.bestPres!=="number") S.bestPres=0;
     if(!S.equip) S.equip={tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0};
     if(!S.rel) S.rel={};
     if(!S.rivals || !S.rivals.length) S.rivals=initRivals();
