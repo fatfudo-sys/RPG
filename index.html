@@ -649,7 +649,25 @@ function rankName(){
 function salary(){
   return Math.floor((30000 + S.rep*90) * Math.pow(1.16, S.level-1) * (1 + rankIndex()*0.28));
 }
-function fmt(n){ return Math.floor(n).toLocaleString('en-US'); }
+/* ---------- clicker-style number abbreviation (K M B T Qa..Dc, then aa,ab..) ---------- */
+const NUM_SUFFIX=["","K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc"];
+function alphaSuffix(m){ // 0->aa, 1->ab, ... (base-26, min 2 letters)
+  const d=[]; let x=m;
+  do{ d.unshift(x%26); x=Math.floor(x/26); }while(x>0);
+  while(d.length<2) d.unshift(0);
+  return d.map(v=>String.fromCharCode(97+v)).join("");
+}
+function abbr(n){
+  n=Number(n); if(!isFinite(n)) return "∞";
+  const neg=n<0; n=Math.abs(n);
+  if(n<1000) return (neg?"-":"")+Math.floor(n).toString();
+  let t=Math.floor(Math.log10(n)/3);
+  let val=n/Math.pow(1000,t);
+  if(val>=999.995){ t++; val=n/Math.pow(1000,t); }
+  const suf = t<NUM_SUFFIX.length ? NUM_SUFFIX[t] : alphaSuffix(t-NUM_SUFFIX.length);
+  return (neg?"-":"")+val.toFixed(2)+suf;
+}
+function fmt(n){ return abbr(n); }
 function diffStars(d){ return d<=5 ? "⭐".repeat(d) : "⭐×"+d; }
 
 /* ========================================================================
@@ -1953,7 +1971,7 @@ function upgradeEmp(i){
 /* ========================================================================
    社群媒體 · 粉絲 · 雜誌訪問 · 大學演講
    ===================================================================== */
-function fmtK(n){ n=Math.floor(n); if(n>=1e8) return (n/1e8).toFixed(1)+"億"; if(n>=1e4) return (n/1e4).toFixed(1)+"萬"; return fmt(n); }
+function fmtK(n){ return abbr(n); }
 function fameMult(){ return 1 + Math.min(2.5, (S.followers||0)/40000); }   // 粉絲加成，最高 +250%
 function socialIncome(){ return Math.floor((S.followers||0)/500); }        // 業配/贊助被動收入
 function bestGrade(){ let g=0; for(const w of (S.works||[])) g=Math.max(g,gradeRank[w.grade]); return g; }
