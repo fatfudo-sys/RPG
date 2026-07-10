@@ -42,7 +42,8 @@
   /* ===== Main ===== */
   #main{flex:1; display:flex; gap:10px; padding:10px; min-height:0;}
   #stageWrap{flex:1; position:relative; border:1px solid var(--line); border-radius:14px; overflow:hidden;
-             background:#0a0e14; min-height:0; box-shadow:inset 0 0 60px rgba(0,0,0,.5);
+             background:radial-gradient(120% 120% at 50% 30%, #f6efe0, #e9dfca 70%, #e0d5bd);
+             min-height:0; box-shadow:inset 0 0 50px rgba(120,100,60,.18);
              transition:opacity .28s ease;}
   #stage{width:100%; height:100%; display:block; cursor:pointer; touch-action:none;}
   #daynight{position:absolute; inset:0; z-index:3; pointer-events:none; mix-blend-mode:multiply;
@@ -810,24 +811,29 @@ function seenFloor(){ const k=seenKey(); if(!S.seen[k]) S.seen[k]={}; return S.s
 
 function drawWalls(){
   const c=roomCorners();
-  // 兩面後牆（左較暗、右較亮），厚重黑邊，等距室內風
-  const left = `<polygon points="${c.L.x},${c.L.y} ${c.Tp.x},${c.Tp.y} ${c.Tp.x},${c.Tp.y-WALL_H} ${c.L.x},${c.L.y-WALL_H}" fill="#d7ccb0" stroke="#161616" stroke-width="2.5" stroke-linejoin="round"/>`;
-  const right= `<polygon points="${c.Tp.x},${c.Tp.y} ${c.R.x},${c.R.y} ${c.R.x},${c.R.y-WALL_H} ${c.Tp.x},${c.Tp.y-WALL_H}" fill="#ece2ca" stroke="#161616" stroke-width="2.5" stroke-linejoin="round"/>`;
+  // 兩面後牆（左略灰、右明亮的白牆），厚重黑邊，等距室內插畫風
+  const left = `<polygon points="${c.L.x},${c.L.y} ${c.Tp.x},${c.Tp.y} ${c.Tp.x},${c.Tp.y-WALL_H} ${c.L.x},${c.L.y-WALL_H}" fill="#e6dcc4" stroke="#161616" stroke-width="2.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+  const right= `<polygon points="${c.Tp.x},${c.Tp.y} ${c.R.x},${c.R.y} ${c.R.x},${c.R.y-WALL_H} ${c.Tp.x},${c.Tp.y-WALL_H}" fill="#f5eede" stroke="#161616" stroke-width="2.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
   // 牆頂細邊
-  const cap = `<polyline points="${c.L.x},${c.L.y-WALL_H} ${c.Tp.x},${c.Tp.y-WALL_H} ${c.R.x},${c.R.y-WALL_H}" fill="none" stroke="#161616" stroke-width="2.5" stroke-linejoin="round"/>`;
-  layers.wall.innerHTML = left+right+cap;
+  const cap = `<polyline points="${c.L.x},${c.L.y-WALL_H} ${c.Tp.x},${c.Tp.y-WALL_H} ${c.R.x},${c.R.y-WALL_H}" fill="none" stroke="#161616" stroke-width="2.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+  // 右牆窗戶
+  const lerp=(a,b,t)=>[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+  const Tp2=[c.Tp.x,c.Tp.y-WALL_H], R2=[c.R.x,c.R.y-WALL_H];
+  const a=lerp(Tp2,R2,0.46), b2=lerp(Tp2,R2,0.80), wy=12, wh=22;
+  const win = `<polygon points="${a[0].toFixed(1)},${(a[1]+wy).toFixed(1)} ${b2[0].toFixed(1)},${(b2[1]+wy).toFixed(1)} ${b2[0].toFixed(1)},${(b2[1]+wy+wh).toFixed(1)} ${a[0].toFixed(1)},${(a[1]+wy+wh).toFixed(1)}" fill="#cfe6f0" stroke="#161616" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <line x1="${lerp(a,b2,0.5)[0].toFixed(1)}" y1="${(lerp(a,b2,0.5)[1]+wy).toFixed(1)}" x2="${lerp(a,b2,0.5)[0].toFixed(1)}" y2="${(lerp(a,b2,0.5)[1]+wy+wh).toFixed(1)}" stroke="#161616" stroke-width="1.4" vector-effect="non-scaling-stroke"/>`;
+  layers.wall.innerHTML = left+right+win+cap;
 }
 function drawFloor(){
   const c=roomCorners();
   let html="";
   for(let y=1;y<=ROWS-2;y++) for(let x=1;x<=COLS-2;x++){
     const vis=tileVisible(x,y);
-    const fill = vis ? (((x+y)&1)?"#ecdfbf":"#e4d5b1") : "#0e131b";
-    const stroke = vis ? "#cdbe97" : "#0a0d12";
-    html += `<polygon points="${tileDiamond(x,y)}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>`;
+    const fill = vis ? (((x+y)&1)?"#e8d9b6":"#e0cfa9") : "#ded3bb";
+    html += `<polygon points="${tileDiamond(x,y)}" fill="${fill}" stroke="${vis?'#c9ba92':'#d6cbb1'}" stroke-width="1"/>`;
   }
   // 前緣粗黑輪廓（地板外框）
-  html += `<polyline points="${c.R.x},${c.R.y} ${c.B.x},${c.B.y} ${c.L.x},${c.L.y}" fill="none" stroke="#161616" stroke-width="2.5" stroke-linejoin="round"/>`;
+  html += `<polyline points="${c.R.x},${c.R.y} ${c.B.x},${c.B.y} ${c.L.x},${c.L.y}" fill="none" stroke="#161616" stroke-width="2.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
   layers.floor.innerHTML = html;
 }
 function emojiText(x,y,em,size){
@@ -904,8 +910,29 @@ function artBed(cx,cy){
        + cuboid(cx,cy,0,0,0.40,0.32,7,5,WHITE)                 // 床墊
        + cuboid(cx,cy,-0.34,0,0.05,0.30,7,12,WHITE);           // 枕/床頭
 }
+function artLamp(cx,cy){
+  const st='stroke="#1d1d1d" stroke-width="1.6" vector-effect="non-scaling-stroke"';
+  let s=cuboid(cx,cy,0,0,0.09,0.09,0,3,DARK);
+  const p=isoPt(cx,cy,0,0,3);
+  s+=`<line x1="${p[0]}" y1="${p[1]}" x2="${p[0]}" y2="${p[1]-30}" ${st}/>`;
+  s+=`<path d="M${p[0]-9},${p[1]-30} L${p[0]+9},${p[1]-30} L${p[0]+6},${p[1]-42} L${p[0]-6},${p[1]-42} Z" fill="#f6e6ac" ${st} stroke-linejoin="round"/>`;
+  return s;
+}
+function artFountain(cx,cy){
+  let s=cuboid(cx,cy,0,0,0.34,0.34,0,7,GREY);
+  const p=isoPt(cx,cy,0,0,7);
+  s+=`<ellipse cx="${p[0].toFixed(1)}" cy="${(p[1]-3).toFixed(1)}" rx="${(TW*0.30).toFixed(1)}" ry="${(TH*0.30).toFixed(1)}" fill="#a6d6ea" stroke="#1d1d1d" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+  return s;
+}
+function artPedestal(cx,cy){
+  let s=cuboid(cx,cy,0,0,0.15,0.15,0,18,WHITE);
+  const p=isoPt(cx,cy,0,0,18);
+  s+=circ(p[0],p[1]-6,6,"#d0cbbc");
+  return s;
+}
 const ART={
   "🖥️":artDesk,"💻":artDesk,
+  "💡":artLamp,"⛲":artFountain,"🗿":artPedestal,"🎨":artBoard,"🖌️":artBoard,"🛠️":artCrate,
   "🪑":artChair,
   "🪴":artPlant,"🌿":artPlant,"🌸":artPlant,
   "🌳":artTree,
@@ -970,12 +997,26 @@ function drawLabels(){
   layers.label.innerHTML = FLOOR.zones.map(z=>{
     const w=z.name.length*12+16, cx=isoX(z.x,z.y), cy=isoY(z.x,z.y)-TH*1.3;
     return `<g>
-      <rect x="${cx-w/2}" y="${cy-13}" width="${w}" height="19" rx="9" fill="#0b0f16" opacity="0.7" stroke="#33405a" stroke-width="1"/>
-      <text x="${cx}" y="${cy-1}" font-size="11" fill="#aebbd0" text-anchor="middle" font-weight="700" letter-spacing="1">${z.name}</text>
+      <rect x="${cx-w/2}" y="${cy-13}" width="${w}" height="19" rx="9" fill="#fffdf5" opacity="0.9" stroke="#1d1d1d" stroke-width="1.3" vector-effect="non-scaling-stroke"/>
+      <text x="${cx}" y="${cy-1}" font-size="11" fill="#3a3320" text-anchor="middle" font-weight="700" letter-spacing="1">${z.name}</text>
     </g>`;
   }).join("");
 }
-function entShadow(x,y){ const cx=isoX(x,y),cy=isoY(x,y); return `<ellipse cx="${cx}" cy="${cy+2}" rx="15" ry="7" fill="rgba(0,0,0,.18)"/>`; }
+function entShadow(x,y){ const cx=isoX(x,y),cy=isoY(x,y); return `<ellipse cx="${cx}" cy="${cy+2}" rx="14" ry="6.5" fill="rgba(90,70,40,.20)"/>`; }
+/* 等距線稿小人 */
+const SKIN_T=["#f2cda4","#e2ab7a","#c98a58","#f6d6b6"], SHIRT_T=["#5aa9ff","#ff85c0","#5cd6a0","#ffce54","#b085ff","#ff6b6b","#7fb069","#f28e5a","#63c3c3","#c98ae0"], HAIR_T=["#2b2b2b","#4a3526","#1d1d1d","#5a3a2a","#3a3a44","#7a5a3a"];
+function pickT(arr,seed){ return arr[hashStr(seed)%arr.length]; }
+function personArt(cx,cy,seed,fixed){
+  const shirt=fixed?fixed.shirt:pickT(SHIRT_T,seed+"s"), skin=fixed?fixed.skin:pickT(SKIN_T,seed+"k"), hair=fixed?fixed.hair:pickT(HAIR_T,seed+"h");
+  const st='stroke="#1d1d1d" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"';
+  let s="";
+  s+=`<rect x="${cx-5.2}" y="${cy-13}" width="4.4" height="13" rx="2" fill="#3a4150" ${st}/>`;
+  s+=`<rect x="${cx+0.8}" y="${cy-13}" width="4.4" height="13" rx="2" fill="#3a4150" ${st}/>`;
+  s+=`<path d="M${cx-8},${cy-11} L${cx+8},${cy-11} L${cx+6.6},${cy-27} Q${cx},${cy-30} ${cx-6.6},${cy-27} Z" fill="${shirt}" ${st}/>`;
+  s+=`<circle cx="${cx}" cy="${cy-35}" r="6.6" fill="${skin}" ${st}/>`;
+  s+=`<path d="M${cx-6.7},${cy-36} a6.7,6.7 0 0 1 13.4,0 Z" fill="${hair}" ${st}/>`;
+  return s;
+}
 function drawNpcs(){
   let html="";
   // depth-sorted so nearer entities overlap farther ones
@@ -987,9 +1028,9 @@ function drawNpcs(){
     if(active) mark=`<text x="${cx}" y="${cy-TH*1.1}" font-size="17" text-anchor="middle">⏳<animate attributeName="y" values="${cy-TH*1.1};${cy-TH*1.4};${cy-TH*1.1}" dur="1.2s" repeatCount="indefinite"/></text>`;
     else if(!S.quest) mark=`<text x="${cx}" y="${cy-TH*1.1}" font-size="17" text-anchor="middle">💬<animate attributeName="font-size" values="15;21;15" dur="1.3s" repeatCount="indefinite"/></text>`;
     html+=`<g data-npc="${n.id}" style="cursor:pointer">${entShadow(n.x,n.y)}
-      <circle cx="${cx}" cy="${cy-10}" r="24" fill="transparent"/>
-      ${emojiText(n.x,n.y,n.face,32)}
-      <text x="${cx}" y="${cy+TH*0.75}" font-size="9.5" fill="#7a6a4a" text-anchor="middle" font-weight="700">${n.name}</text>
+      <circle cx="${cx}" cy="${cy-20}" r="26" fill="transparent"/>
+      ${personArt(cx,cy,n.id)}
+      <text x="${cx}" y="${cy+TH*0.7}" font-size="9.5" fill="#6a5a3a" text-anchor="middle" font-weight="700">${n.name}</text>
       ${mark}</g>`;
   }
   const e=FLOOR.elevator, ex=isoX(e.x,e.y), ey=isoY(e.x,e.y);
@@ -1014,8 +1055,8 @@ let playerEl;
 function drawPlayer(){
   layers.player.innerHTML =
     `<g id="pg">
-      <ellipse cx="0" cy="6" rx="15" ry="7" fill="rgba(0,0,0,.28)"/>
-      <text id="pface" x="0" y="-14" font-size="34" text-anchor="middle" dominant-baseline="central">🧑‍🎨</text>
+      <ellipse cx="0" cy="2" rx="13" ry="6" fill="rgba(90,70,40,.28)"/>
+      ${personArt(0,0,"hero",{shirt:"#63c3c3",skin:"#f2cda4",hair:"#2b2b2b"})}
     </g>`;
   playerEl = $("pg");
 }
