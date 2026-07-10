@@ -464,10 +464,13 @@ function buildFloor1(){
   for(let y=2;y<=5;y++) W(9,y);
   for(let y=2;y<=5;y++) W(18,y);
   W(10,1);W(11,1);W(12,1);
+  // 玻璃門（開口，可通行）
+  const doors=[{x:6,y:1},{x:9,y:4},{x:18,y:4}];
+  for(const d of doors){ blocked[d.y][d.x]=false; const i=walls.findIndex(w=>w.x===d.x&&w.y===d.y); if(i>=0) walls.splice(i,1); }
   // elevator
   const elevator={x:18,y:9}; blocked[9][18]=true;
   return {
-    name:"設計中心 1F", blocked, decor, walls, elevator, facs,
+    name:"設計中心 1F", blocked, decor, walls, doors, elevator, facs,
     pantry:{x:12,y:9}, start:{x:3,y:14},
     zones:[
       {x:3,y:14,name:"你的座位"},{x:8,y:13,name:"設計師工作區"},{x:14,y:13,name:"UX 研究室"},
@@ -516,9 +519,11 @@ function buildFloor2(){
   for(let y=2;y<=5;y++) W(9,y);
   for(let y=2;y<=5;y++) W(18,y);
   W(10,1);W(11,1);W(12,1);
+  const doors=[{x:6,y:1},{x:9,y:4},{x:18,y:4}];
+  for(const d of doors){ blocked[d.y][d.x]=false; const i=walls.findIndex(w=>w.x===d.x&&w.y===d.y); if(i>=0) walls.splice(i,1); }
   const elevator={x:18,y:9}; blocked[9][18]=true;
   return {
-    name:"研發展示大樓 2F", blocked, decor, walls, elevator, facs,
+    name:"研發展示大樓 2F", blocked, decor, walls, doors, elevator, facs,
     pantry:{x:13,y:4}, start:{x:17,y:9},
     zones:[
       {x:6,y:13,name:"產品展示中心"},{x:14,y:13,name:"使用者測試室"},{x:21,y:13,name:"打樣工坊"},
@@ -584,6 +589,18 @@ function buildFloorN(city,n){
   const free=(x,y)=>x>1&&x<COLS-1&&y>1&&y<ROWS-1&&!used.has(x+","+y);
   const spot=()=>{ let x,y,g=0; do{ x=ri(2,COLS-2); y=ri(2,ROWS-2); g++; }while(!free(x,y)&&g<200); used.add(x+","+y); return {x,y}; };
   const D=(x,y,em,size,fac)=>{ decor.push({x,y,em,size:size||30}); blocked[y][x]=true; if(fac) facs.push({x,y,type:fac}); };
+  // 玻璃隔間會議室（左上角，含玻璃門；門可通行，內外皆可達）
+  const doors=[];
+  (function(){
+    const gx0=3,gy0=2,gx1=8,gy1=5, dX=5;
+    for(let x=gx0;x<=gx1;x++){ for(const y of [gy0,gy1]){ if(x===dX&&y===gy1) continue; walls.push({x,y}); blocked[y][x]=true; used.add(x+","+y); } }
+    for(let y=gy0+1;y<gy1;y++){ for(const x of [gx0,gx1]){ walls.push({x,y}); blocked[y][x]=true; used.add(x+","+y); } }
+    doors.push({x:dX,y:gy1}); used.add(dX+","+gy1);
+    D(((gx0+gx1)>>1),((gy0+gy1)>>1),"📊",28); used.add(((gx0+gx1)>>1)+","+((gy0+gy1)>>1));
+    D(gx0+1,gy0+1,"🪑",26); used.add((gx0+1)+","+(gy0+1));
+    D(gx1-1,gy0+1,"🪑",26); used.add((gx1-1)+","+(gy0+1));
+    for(let x=gx0;x<=gx1;x++)for(let y=gy0;y<=gy1;y++) used.add(x+","+y);
+  })();
   // facilities (single-tile obstacles on an otherwise open field → always reachable)
   const coffeeP=spot(); D(coffeeP.x,coffeeP.y,"☕",30,"coffee");
   const pr=spot(); D(pr.x,pr.y,"🖨️",30,"printer");
@@ -615,7 +632,8 @@ function buildFloorN(city,n){
   const themeBase=FLOOR_THEMES[(n-1)%FLOOR_THEMES.length];
   const suffix = n>FLOOR_THEMES.length ? " ✦"+Math.ceil(n/FLOOR_THEMES.length) : "";
   const nm2 = city==="tpe" ? `${themeBase}${suffix} ${n}F` : `${c.flag}${c.short}·${themeBase}${suffix} ${n}F`;
-  return { name:nm2, blocked, decor, walls, elevator, facs,
+  zones.push({x:5,y:3,name:"玻璃會議室"});
+  return { name:nm2, blocked, decor, walls, doors, elevator, facs,
     pantry:{x:coffeeP.x,y:coffeeP.y}, start:{x:17,y:9}, zones, npcs };
 }
 let curFloor = 1;
@@ -779,12 +797,12 @@ const stage = $("stage");
 let layers = {};
 function buildLayers(){
   stage.innerHTML = "";
-  ["wall","floor","decor","label","npc","fx","player","fog"].forEach(name=>{
+  ["wall","floor","decor","glass","label","npc","fx","player","fog"].forEach(name=>{
     const g = document.createElementNS(SVGNS,"g");
     g.setAttribute("id","L_"+name);
     stage.appendChild(g); layers[name]=g;
   });
-  drawWalls(); drawFloor(); drawDecor(); drawLabels(); drawNpcs(); drawPlayer();
+  drawWalls(); drawFloor(); drawDecor(); drawGlass(); drawLabels(); drawNpcs(); drawPlayer();
 }
 function seenKey(){ return curCity+":"+curFloor; }
 function tileVisible(x,y){ const s=S.seen[seenKey()]; return !!(s && s[x+","+y]); }
@@ -906,6 +924,47 @@ function drawDecor(){
     if(fn){ const cx=isoX(d.x,d.y), cy=isoY(d.x,d.y); return `<g>${entShadow(d.x,d.y)}${fn(cx,cy)}</g>`; }
     return emojiText(d.x,d.y,d.em,(d.size||30)+2);
   }).join("");
+}
+/* ---------- 玻璃隔間牆 + 玻璃門 ---------- */
+function ptS(p){ return p[0].toFixed(1)+","+p[1].toFixed(1); }
+function segEndpoints(cx,cy,horiz){
+  return horiz ? [[-0.5,0],[0.5,0]] : [[0,-0.5],[0,0.5]];
+}
+function glassPane(cx,cy,horiz,H,fill){
+  const e=segEndpoints(cx,cy,horiz);
+  const bl=isoPt(cx,cy,e[0][0],e[0][1],0), br=isoPt(cx,cy,e[1][0],e[1][1],0);
+  const tr=isoPt(cx,cy,e[1][0],e[1][1],H), tl=isoPt(cx,cy,e[0][0],e[0][1],H);
+  const mix=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+  let s=`<polygon points="${ptS(bl)} ${ptS(br)} ${ptS(tr)} ${ptS(tl)}" fill="${fill}" stroke="#1d1d1d" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+  // 反光斜線
+  for(const t of [0.28,0.6]){ const a=mix(bl,br,t), b=mix(tl,tr,t);
+    s+=`<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}" stroke="rgba(255,255,255,0.4)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>`; }
+  // 立柱
+  s+=`<line x1="${bl[0]}" y1="${bl[1]}" x2="${tl[0]}" y2="${tl[1]}" stroke="#1d1d1d" stroke-width="2.6" vector-effect="non-scaling-stroke"/>`;
+  s+=`<line x1="${br[0]}" y1="${br[1]}" x2="${tr[0]}" y2="${tr[1]}" stroke="#1d1d1d" stroke-width="2.6" vector-effect="non-scaling-stroke"/>`;
+  return {s,bl,br,tr,tl,mix};
+}
+function drawGlass(){
+  const walls=FLOOR.walls||[], doors=FLOOR.doors||[];
+  const isW=(x,y)=>walls.some(w=>w.x===x&&w.y===y)||doors.some(d=>d.x===x&&d.y===y);
+  let s="";
+  const H=36;
+  for(const w of walls){
+    const horiz=isW(w.x-1,w.y)||isW(w.x+1,w.y);
+    s+=glassPane(isoX(w.x,w.y),isoY(w.x,w.y),horiz,H,"rgba(150,201,222,0.30)").s;
+  }
+  for(const d of doors){
+    const horiz=isW(d.x-1,d.y)||isW(d.x+1,d.y);
+    const g=glassPane(isoX(d.x,d.y),isoY(d.x,d.y),horiz,H,"rgba(198,226,238,0.20)");
+    s+=g.s;
+    // 中央門縫 + 把手
+    const mb=g.mix(g.bl,g.br,0.5), mt=g.mix(g.tl,g.tr,0.5);
+    s+=`<line x1="${mb[0].toFixed(1)}" y1="${mb[1].toFixed(1)}" x2="${mt[0].toFixed(1)}" y2="${mt[1].toFixed(1)}" stroke="#1d1d1d" stroke-width="1.8" vector-effect="non-scaling-stroke"/>`;
+    const h1=g.mix(mb,mt,0.45), h2=g.mix(g.mix(g.bl,g.br,0.62),g.mix(g.tl,g.tr,0.62),0.45);
+    s+=`<circle cx="${h1[0].toFixed(1)}" cy="${h1[1].toFixed(1)}" r="2.2" fill="#1d1d1d"/>`;
+    s+=`<circle cx="${h2[0].toFixed(1)}" cy="${h2[1].toFixed(1)}" r="2.2" fill="#1d1d1d"/>`;
+  }
+  layers.glass.innerHTML=s;
 }
 function drawLabels(){
   layers.label.innerHTML = FLOOR.zones.map(z=>{
