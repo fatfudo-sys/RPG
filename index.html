@@ -241,6 +241,25 @@
    設計中心生存記  —  single-file HTML5 game  (v2: 音效 + 成就 + 二樓)
    ===================================================================== */
 const T = 46;
+/* ---------- isometric projection ---------- */
+const TW=60, TH=30, WALL_H=54;                 // tile diamond & back-wall height
+function isoX(gx,gy){ return (gx-gy)*(TW/2); }
+function isoY(gx,gy){ return (gx+gy)*(TH/2); }
+function tileDiamond(gx,gy){ const cx=isoX(gx,gy),cy=isoY(gx,gy);
+  return `${cx},${cy-TH/2} ${cx+TW/2},${cy} ${cx},${cy+TH/2} ${cx-TW/2},${cy}`; }
+function roomCorners(){
+  const x0=1,x1=COLS-2,y0=1,y1=ROWS-2;
+  return {
+    Tp:{x:isoX(x0,y0), y:isoY(x0,y0)-TH/2},
+    R :{x:isoX(x1,y0)+TW/2, y:isoY(x1,y0)},
+    B :{x:isoX(x1,y1), y:isoY(x1,y1)+TH/2},
+    L :{x:isoX(x0,y1)-TW/2, y:isoY(x0,y1)},
+  };
+}
+function worldBounds(){
+  const c=roomCorners();
+  return { minX:c.L.x-10, maxX:c.R.x+10, minY:c.Tp.y-WALL_H-14, maxY:c.B.y+14 };
+}
 const COLS = 26, ROWS = 18;
 const SVGNS = "http://www.w3.org/2000/svg";
 const $ = id => document.getElementById(id);
@@ -760,117 +779,101 @@ const stage = $("stage");
 let layers = {};
 function buildLayers(){
   stage.innerHTML = "";
-  ["floor","decor","label","npc","fx","player","fog"].forEach(name=>{
+  ["wall","floor","decor","label","npc","fx","player","fog"].forEach(name=>{
     const g = document.createElementNS(SVGNS,"g");
     g.setAttribute("id","L_"+name);
     stage.appendChild(g); layers[name]=g;
   });
-  drawFloor(); drawDecor(); drawLabels(); drawNpcs(); drawPlayer(); drawFog();
+  drawWalls(); drawFloor(); drawDecor(); drawLabels(); drawNpcs(); drawPlayer();
 }
 function seenKey(){ return curCity+":"+curFloor; }
 function tileVisible(x,y){ const s=S.seen[seenKey()]; return !!(s && s[x+","+y]); }
 function seenFloor(){ const k=seenKey(); if(!S.seen[k]) S.seen[k]={}; return S.seen[k]; }
 
-const ZONE_PAL = ["#5a4488","#2f5a6a","#3a6a4a","#6a5a2a","#6a3a4a","#3a4a7a","#5a3a6a","#2a6a5a","#6a4a2a","#4a5a2a"];
+function drawWalls(){
+  const c=roomCorners();
+  // 兩面後牆（左較暗、右較亮），厚重黑邊，等距室內風
+  const left = `<polygon points="${c.L.x},${c.L.y} ${c.Tp.x},${c.Tp.y} ${c.Tp.x},${c.Tp.y-WALL_H} ${c.L.x},${c.L.y-WALL_H}" fill="#d7ccb0" stroke="#161616" stroke-width="2.5" stroke-linejoin="round"/>`;
+  const right= `<polygon points="${c.Tp.x},${c.Tp.y} ${c.R.x},${c.R.y} ${c.R.x},${c.R.y-WALL_H} ${c.Tp.x},${c.Tp.y-WALL_H}" fill="#ece2ca" stroke="#161616" stroke-width="2.5" stroke-linejoin="round"/>`;
+  // 牆頂細邊
+  const cap = `<polyline points="${c.L.x},${c.L.y-WALL_H} ${c.Tp.x},${c.Tp.y-WALL_H} ${c.R.x},${c.R.y-WALL_H}" fill="none" stroke="#161616" stroke-width="2.5" stroke-linejoin="round"/>`;
+  layers.wall.innerHTML = left+right+cap;
+}
 function drawFloor(){
-  const {blocked,decor,walls}=FLOOR;
+  const c=roomCorners();
   let html="";
-  for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
-    const isDecor = decor.some(d=>d.x===x&&d.y===y);
-    const wall = blocked[y][x] && !isDecor &&
-                 (x===0||y===0||x===COLS-1||y===ROWS-1||walls.some(w=>w.x===x&&w.y===y));
-    const fill = wall ? "#222c40" : ((x+y)%2? "#11151d":"#141926");
-    html += `<rect x="${x*T}" y="${y*T}" width="${T}" height="${T}" fill="${fill}"/>`;
-    if(wall) html += `<rect x="${x*T+2.5}" y="${y*T+2.5}" width="${T-5}" height="${T-5}" fill="none" stroke="#38466040" stroke-width="1.5" rx="5"/>`;
-    else html += `<circle cx="${x*T+T/2}" cy="${y*T+T/2}" r="1.1" fill="#ffffff10"/>`;
+  for(let y=1;y<=ROWS-2;y++) for(let x=1;x<=COLS-2;x++){
+    const vis=tileVisible(x,y);
+    const fill = vis ? (((x+y)&1)?"#ecdfbf":"#e4d5b1") : "#0e131b";
+    const stroke = vis ? "#cdbe97" : "#0a0d12";
+    html += `<polygon points="${tileDiamond(x,y)}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>`;
   }
-  // zone carpets (colored rugs for readability)
-  FLOOR.zones.forEach((z,i)=>{
-    if(z.name==="電梯") return;
-    const col=ZONE_PAL[i%ZONE_PAL.length];
-    const w=z.w||6, h=z.h||4;
-    const x=Math.max(1,z.x-Math.floor(w/2)), y=Math.max(1,z.y-Math.floor(h/2));
-    const ww=Math.min(COLS-1-x,w), hh=Math.min(ROWS-1-y,h);
-    html += `<rect x="${x*T+3}" y="${y*T+3}" width="${ww*T-6}" height="${hh*T-6}" rx="12" fill="${col}" opacity="0.15" stroke="${col}" stroke-opacity="0.35" stroke-width="1.5"/>`;
-  });
+  // 前緣粗黑輪廓（地板外框）
+  html += `<polyline points="${c.R.x},${c.R.y} ${c.B.x},${c.B.y} ${c.L.x},${c.L.y}" fill="none" stroke="#161616" stroke-width="2.5" stroke-linejoin="round"/>`;
   layers.floor.innerHTML = html;
 }
 function emojiText(x,y,em,size){
-  return `<text x="${x*T+T/2}" y="${y*T+T/2}" font-size="${size}" text-anchor="middle" dominant-baseline="central">${em}</text>`;
+  const cx=isoX(x,y), cy=isoY(x,y);
+  return `<text x="${cx}" y="${cy-TH*0.35}" font-size="${size}" text-anchor="middle" dominant-baseline="central">${em}</text>`;
 }
-function drawDecor(){ layers.decor.innerHTML = FLOOR.decor.map(d=>emojiText(d.x,d.y,d.em,d.size)).join(""); }
+function drawDecor(){
+  const list=[...FLOOR.decor].sort((a,b)=>(a.x+a.y)-(b.x+b.y));
+  layers.decor.innerHTML = list.map(d=>emojiText(d.x,d.y,d.em,(d.size||30)+2)).join("");
+}
 function drawLabels(){
   layers.label.innerHTML = FLOOR.zones.map(z=>{
-    const w=z.name.length*13+18, cx=z.x*T+T/2;
+    const w=z.name.length*12+16, cx=isoX(z.x,z.y), cy=isoY(z.x,z.y)-TH*1.3;
     return `<g>
-      <rect x="${cx-w/2}" y="${z.y*T-T*0.95}" width="${w}" height="21" rx="10" fill="#0b0f16" opacity="0.72" stroke="#33405a" stroke-width="1"/>
-      <text x="${cx}" y="${z.y*T-T*0.62}" font-size="12" fill="#aebbd0" text-anchor="middle" font-weight="700" letter-spacing="1">${z.name}</text>
+      <rect x="${cx-w/2}" y="${cy-13}" width="${w}" height="19" rx="9" fill="#0b0f16" opacity="0.7" stroke="#33405a" stroke-width="1"/>
+      <text x="${cx}" y="${cy-1}" font-size="11" fill="#aebbd0" text-anchor="middle" font-weight="700" letter-spacing="1">${z.name}</text>
     </g>`;
   }).join("");
 }
+function entShadow(x,y){ const cx=isoX(x,y),cy=isoY(x,y); return `<ellipse cx="${cx}" cy="${cy+2}" rx="15" ry="7" fill="rgba(0,0,0,.18)"/>`; }
 function drawNpcs(){
-  // NPCs
-  layers.npc.innerHTML = FLOOR.npcs.map(n=>{
+  let html="";
+  // depth-sorted so nearer entities overlap farther ones
+  const npcs=[...FLOOR.npcs].sort((a,b)=>(a.x+a.y)-(b.x+b.y));
+  for(const n of npcs){
+    const cx=isoX(n.x,n.y), cy=isoY(n.x,n.y);
     const active = S.quest && S.quest.npc===n.id;
-    let mark = "";
-    if(active){
-      mark = `<text x="${n.x*T+T/2}" y="${n.y*T-T*0.35}" font-size="18" text-anchor="middle">⏳
-        <animate attributeName="y" values="${n.y*T-T*0.35};${n.y*T-T*0.5};${n.y*T-T*0.35}" dur="1.2s" repeatCount="indefinite"/></text>`;
-    } else if(!S.quest){
-      mark = `<text x="${n.x*T+T/2}" y="${n.y*T-T*0.35}" font-size="18" text-anchor="middle">💬
-        <animate attributeName="font-size" values="16;22;16" dur="1.3s" repeatCount="indefinite"/></text>`;
-    }
-    return `<g data-npc="${n.id}" style="cursor:pointer">
-      ${emojiText(n.x,n.y,n.face,34)}
-      <text x="${n.x*T+T/2}" y="${n.y*T+T*0.72}" font-size="10" fill="#9fb0c8" text-anchor="middle" font-weight="700">${n.name}</text>
+    let mark="";
+    if(active) mark=`<text x="${cx}" y="${cy-TH*1.1}" font-size="17" text-anchor="middle">⏳<animate attributeName="y" values="${cy-TH*1.1};${cy-TH*1.4};${cy-TH*1.1}" dur="1.2s" repeatCount="indefinite"/></text>`;
+    else if(!S.quest) mark=`<text x="${cx}" y="${cy-TH*1.1}" font-size="17" text-anchor="middle">💬<animate attributeName="font-size" values="15;21;15" dur="1.3s" repeatCount="indefinite"/></text>`;
+    html+=`<g data-npc="${n.id}" style="cursor:pointer">${entShadow(n.x,n.y)}
+      <circle cx="${cx}" cy="${cy-10}" r="24" fill="transparent"/>
+      ${emojiText(n.x,n.y,n.face,32)}
+      <text x="${cx}" y="${cy+TH*0.75}" font-size="9.5" fill="#7a6a4a" text-anchor="middle" font-weight="700">${n.name}</text>
       ${mark}</g>`;
-  }).join("");
-  // elevator
-  const e=FLOOR.elevator;
-  layers.npc.innerHTML += `<g data-elev="1" style="cursor:pointer">
-    ${emojiText(e.x,e.y,"🛗",34)}
-    <text x="${e.x*T+T/2}" y="${e.y*T-T*0.35}" font-size="16" text-anchor="middle">⬆️
-      <animate attributeName="opacity" values="0.4;1;0.4" dur="1.4s" repeatCount="indefinite"/></text>
-    <text x="${e.x*T+T/2}" y="${e.y*T+T*0.72}" font-size="10" fill="#5aa9ff" text-anchor="middle" font-weight="700">電梯</text>
-    </g>`;
-  // interactive facilities (clickable, with pulsing gear badge)
-  (FLOOR.facs||[]).forEach(fc=>{
-    layers.npc.innerHTML += `<g data-fac="${fc.type}" style="cursor:pointer">
-      <rect x="${fc.x*T}" y="${fc.y*T}" width="${T}" height="${T}" fill="transparent"/>
-      <text x="${fc.x*T+T*0.78}" y="${fc.y*T+T*0.28}" font-size="15" text-anchor="middle">🔧
-        <animate attributeName="opacity" values="0.45;1;0.45" dur="1.6s" repeatCount="indefinite"/></text>
-      <text x="${fc.x*T+T/2}" y="${fc.y*T+T*0.9}" font-size="9" fill="#7fd6a0" text-anchor="middle" font-weight="700">Lv${facLv(fc.type)}</text>
-    </g>`;
-  });
-  layers.npc.querySelectorAll("[data-npc]").forEach(g=>{
-    g.addEventListener("click", e=>{ e.stopPropagation(); goToNpc(g.getAttribute("data-npc")); });
-  });
-  layers.npc.querySelector("[data-elev]").addEventListener("click", e=>{ e.stopPropagation(); goToElevator(); });
-  layers.npc.querySelectorAll("[data-fac]").forEach(g=>{
-    g.addEventListener("click", e=>{ e.stopPropagation(); goToFac(g.getAttribute("data-fac")); });
-  });
+  }
+  const e=FLOOR.elevator, ex=isoX(e.x,e.y), ey=isoY(e.x,e.y);
+  html+=`<g data-elev="1" style="cursor:pointer">${entShadow(e.x,e.y)}
+    <circle cx="${ex}" cy="${ey-10}" r="24" fill="transparent"/>
+    ${emojiText(e.x,e.y,"🛗",32)}
+    <text x="${ex}" y="${ey-TH*1.05}" font-size="15" text-anchor="middle">⬆️<animate attributeName="opacity" values="0.4;1;0.4" dur="1.4s" repeatCount="indefinite"/></text>
+    <text x="${ex}" y="${ey+TH*0.75}" font-size="9.5" fill="#3a6a9a" text-anchor="middle" font-weight="700">電梯</text></g>`;
+  const facs=[...(FLOOR.facs||[])].sort((a,b)=>(a.x+a.y)-(b.x+b.y));
+  for(const fc of facs){ const fx=isoX(fc.x,fc.y), fy=isoY(fc.x,fc.y);
+    html+=`<g data-fac="${fc.type}" style="cursor:pointer">
+      <circle cx="${fx}" cy="${fy-6}" r="20" fill="transparent"/>
+      <text x="${fx+TW*0.28}" y="${fy-TH*0.55}" font-size="14" text-anchor="middle">🔧<animate attributeName="opacity" values="0.45;1;0.45" dur="1.6s" repeatCount="indefinite"/></text>
+      <text x="${fx}" y="${fy+TH*0.8}" font-size="9" fill="#3a7a5a" text-anchor="middle" font-weight="700">Lv${facLv(fc.type)}</text></g>`;
+  }
+  layers.npc.innerHTML=html;
+  layers.npc.querySelectorAll("[data-npc]").forEach(g=>g.addEventListener("click",e=>{ e.stopPropagation(); goToNpc(g.getAttribute("data-npc")); }));
+  const el=layers.npc.querySelector("[data-elev]"); if(el) el.addEventListener("click",e=>{ e.stopPropagation(); goToElevator(); });
+  layers.npc.querySelectorAll("[data-fac]").forEach(g=>g.addEventListener("click",e=>{ e.stopPropagation(); goToFac(g.getAttribute("data-fac")); }));
 }
 let playerEl;
 function drawPlayer(){
   layers.player.innerHTML =
     `<g id="pg">
-      <ellipse cx="0" cy="16" rx="14" ry="5" fill="rgba(0,0,0,.35)"/>
-      <text id="pface" x="0" y="-2" font-size="36" text-anchor="middle" dominant-baseline="central">🧑‍🎨</text>
+      <ellipse cx="0" cy="6" rx="15" ry="7" fill="rgba(0,0,0,.28)"/>
+      <text id="pface" x="0" y="-14" font-size="34" text-anchor="middle" dominant-baseline="central">🧑‍🎨</text>
     </g>`;
   playerEl = $("pg");
 }
-function drawFog(){
-  let html="";
-  for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
-    if(!tileVisible(x,y))
-      html += `<rect x="${x*T}" y="${y*T}" width="${T}" height="${T}" fill="#05070b"/>`;
-    else {
-      const d = Math.max(Math.abs(x-S.px), Math.abs(y-S.py));
-      if(d>=3) html += `<rect x="${x*T}" y="${y*T}" width="${T}" height="${T}" fill="rgba(5,7,11,0.45)"/>`;
-    }
-  }
-  layers.fog.innerHTML = html;
-}
+function drawFog(){ /* iso 模式改由 drawFloor 以明暗地磚呈現探索狀態 */ }
 function reveal(cx,cy){
   const seen=seenFloor();
   let changed=false;
@@ -885,7 +888,7 @@ function reveal(cx,cy){
 /* ========================================================================
    movement
    ===================================================================== */
-let px = 3*T+T/2, py = 14*T+T/2;
+let px = isoX(3,14), py = isoY(3,14);
 let camX = px, camY = py;
 let path = [];
 let pendingNpc = null, pendingElev = false, pendingFac = null;
@@ -958,8 +961,10 @@ function goToFac(type){
 }
 
 stage.addEventListener("click", e=>{
-  const pt = svgPoint(e);
-  const gx = Math.floor(pt.x/T), gy = Math.floor(pt.y/T);
+  const p = svgPoint(e);
+  // 反投影：世界座標 → 格子座標
+  const u=p.x/(TW/2), v=p.y/(TH/2);
+  const gx=Math.round((u+v)/2), gy=Math.round((v-u)/2);
   pendingNpc=null; pendingElev=false; pendingFac=null;
   moveTo(gx,gy);
 });
@@ -989,11 +994,11 @@ function tryInteractHere(){
 /* ========================================================================
    main loop
    ===================================================================== */
-const SPEED = 4.2;
+const SPEED = 4.0;
 function tick(){
   if(path.length){
     const tgt = path[0];
-    const tx = tgt.x*T+T/2, ty = tgt.y*T+T/2;
+    const tx = isoX(tgt.x,tgt.y), ty = isoY(tgt.x,tgt.y);
     const dx=tx-px, dy=ty-py, dist=Math.hypot(dx,dy);
     if(dist < SPEED){
       px=tx; py=ty; S.px=tgt.x; S.py=tgt.y; path.shift();
@@ -1006,26 +1011,15 @@ function tick(){
     } else { px += dx/dist*SPEED; py += dy/dist*SPEED; }
     bob += 0.35;
   } else { bob = 0; }
-
-  const vw = stage.viewBox.baseVal.width || COLS*T;
-  const vh = stage.viewBox.baseVal.height || ROWS*T;
-  let tCamX = clamp(px, vw/2, COLS*T - vw/2);
-  let tCamY = clamp(py, vh/2, ROWS*T - vh/2);
-  if(COLS*T < vw) tCamX = COLS*T/2;
-  if(ROWS*T < vh) tCamY = ROWS*T/2;
-  camX += (tCamX-camX)*0.12; camY += (tCamY-camY)*0.12;
-  stage.setAttribute("viewBox", `${camX-vw/2} ${camY-vh/2} ${vw} ${vh}`);
-
-  const yoff = Math.sin(bob)*3;
+  const yoff = Math.sin(bob)*2.5;
   if(playerEl) playerEl.setAttribute("transform", `translate(${px},${py+yoff})`);
-
   requestAnimationFrame(tick);
 }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 
 let lastZone="";
 function onEnterTile(){
-  if(reveal(S.px,S.py)) drawFog(); else drawFog();
+  if(reveal(S.px,S.py)) drawFloor();
   stepCount++; if(stepCount%2===0) sfx("step");
   let z = nearestZone();
   if(z && z.name!==lastZone){ lastZone=z.name; showZone(z.name); }
@@ -1112,9 +1106,9 @@ function switchFloor(to){
     if(to>=2) S.visited2=true;
     const open=nearestOpen(FLOOR.elevator.x,FLOOR.elevator.y) || FLOOR.start;
     S.px=open.x; S.py=open.y;
-    px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
+    px=isoX(S.px,S.py); py=isoY(S.px,S.py); camX=px; camY=py;
     path=[]; pendingNpc=null; pendingElev=false; lastZone="";
-    buildLayers(); reveal(S.px,S.py); drawFog();
+    buildLayers(); reveal(S.px,S.py); drawFloor(); fitViewport();
     $("floorTxt").textContent=cityById(curCity).flag+" "+FLOOR.name;
     log("🛗 來到「"+FLOOR.name+"」","b");
     checkAch(); save();
@@ -1159,9 +1153,9 @@ function travelTo(id){
     if(!S.seen[seenKey()]) S.seen[seenKey()]={};
     if(!S.cities) S.cities={}; S.cities[id]=true;
     const open=nearestOpen(FLOOR.elevator.x,FLOOR.elevator.y)||FLOOR.start;
-    S.px=open.x; S.py=open.y; px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
+    S.px=open.x; S.py=open.y; px=isoX(S.px,S.py); py=isoY(S.px,S.py); camX=px; camY=py;
     path=[]; pendingNpc=null; pendingElev=false; lastZone="";
-    buildLayers(); reveal(S.px,S.py); drawFog();
+    buildLayers(); reveal(S.px,S.py); drawFloor(); fitViewport();
     $("floorTxt").textContent=c.flag+" "+FLOOR.name;
     log(`✈️ 出差抵達 ${c.flag}${c.name}！全域回報 ×${c.bonus.toFixed(1)}`,"pu");
     toast(`✈️ ${c.flag}${c.name}`);
@@ -2054,10 +2048,10 @@ function doRebirth(){
   setTimeout(()=>{
     curCity="tpe"; curFloor=1; FLOOR=getFloor("tpe",1);
     S.px=FLOOR.start?FLOOR.start.x:3; S.py=FLOOR.start?FLOOR.start.y:14;
-    px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
+    px=isoX(S.px,S.py); py=isoY(S.px,S.py); camX=px; camY=py;
     path=[]; pendingNpc=null; pendingElev=false; pendingFac=null; lastZone="";
     if(!S.daily) rollDaily();
-    buildLayers(); reveal(S.px,S.py); drawFog();
+    buildLayers(); reveal(S.px,S.py); drawFloor(); fitViewport();
     renderSkills(); renderTask(); updateHUD(); updateAchChip(); updateDayChip(); updateDayNight();
     $("floorTxt").textContent=cityById(curCity).flag+" "+FLOOR.name;
     logLines=[];
@@ -2510,10 +2504,14 @@ function resetGame(){
    ===================================================================== */
 function fitViewport(){
   const r=$("stageWrap").getBoundingClientRect();
-  const targetTilesW = Math.min(COLS, Math.max(9, Math.round(r.width/72)));
-  const vw = targetTilesW*T;
-  const vh = vw * (r.height/r.width || 0.7);
-  stage.setAttribute("viewBox", `${camX-vw/2} ${camY-vh/2} ${vw} ${vh}`);
+  const wb=worldBounds();
+  const worldW=(wb.maxX-wb.minX)+70, worldH=(wb.maxY-wb.minY)+70;
+  const cx=(wb.minX+wb.maxX)/2, cy=(wb.minY+wb.maxY)/2;
+  const aspect=(r.width/r.height)||1.4;
+  let vw,vh;
+  if(worldW/worldH > aspect){ vw=worldW; vh=vw/aspect; } else { vh=worldH; vw=vh*aspect; }
+  camX=cx; camY=cy;
+  stage.setAttribute("viewBox", `${cx-vw/2} ${cy-vh/2} ${vw} ${vh}`);
 }
 window.addEventListener("resize", fitViewport);
 
@@ -2525,9 +2523,9 @@ function init(){
   curCity=S.city||"tpe";
   curFloor=(S.cityFloor&&S.cityFloor[curCity])||S.floor||1;
   FLOOR=getFloor(curCity,curFloor);
-  px=S.px*T+T/2; py=S.py*T+T/2; camX=px; camY=py;
+  px=isoX(S.px,S.py); py=isoY(S.px,S.py); camX=px; camY=py;
   buildLayers();
-  reveal(S.px,S.py); drawFog();
+  reveal(S.px,S.py); drawFloor();
   if(!S.daily) rollDaily();
   renderSkills(); renderTask(); updateHUD(); updateAchChip(); updateDayChip(); updateDayNight();
   $("floorTxt").textContent=cityById(curCity).flag+" "+FLOOR.name;
