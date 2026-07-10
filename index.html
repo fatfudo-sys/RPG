@@ -816,9 +816,96 @@ function emojiText(x,y,em,size){
   const cx=isoX(x,y), cy=isoY(x,y);
   return `<text x="${cx}" y="${cy-TH*0.35}" font-size="${size}" text-anchor="middle" dominant-baseline="central">${em}</text>`;
 }
+/* ---------- 等距 SVG 線稿家具工具 ---------- */
+function isoPt(cx,cy,gx,gy,h){ return [cx+(gx-gy)*(TW/2), cy+(gx+gy)*(TH/2)-h]; }
+function poly(pts, fill){ return `<polygon points="${pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}" fill="${fill}" stroke="#1d1d1d" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }
+function circ(x,y,r,fill){ return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${fill}" stroke="#1d1d1d" stroke-width="1.4" vector-effect="non-scaling-stroke"/>`; }
+// 等距長方體：(ox,oy)為格子偏移中心，(ax,ay)半footprint(格)，z0底高、h高(px)，C={t,l,r}
+function cuboid(cx,cy, ox,oy, ax,ay, z0,h, C){
+  const P=(gx,gy,hh)=>isoPt(cx,cy,ox+gx,oy+gy,hh);
+  const A=P(-ax,-ay,z0+h),B=P(ax,-ay,z0+h),Cc=P(ax,ay,z0+h),D=P(-ax,ay,z0+h);
+  const b2=P(ax,-ay,z0),c=P(ax,ay,z0),d=P(-ax,ay,z0);
+  return poly([D,d,c,Cc],C.l)+poly([B,b2,c,Cc],C.r)+poly([A,B,Cc,D],C.t);
+}
+const WOOD={t:"#d9b98c",l:"#b0895c",r:"#c8a271"}, WHITE={t:"#f6f0e2",l:"#d3c6a6",r:"#e6dcc6"},
+      DARK={t:"#41506a",l:"#232c3c",r:"#303b4e"}, GREY={t:"#eaeaee",l:"#c4c4ca",r:"#d8d8de"},
+      GOLD={t:"#f1d572",l:"#c69a38",r:"#e0b84e"}, POT={t:"#e0a06a",l:"#9f5c34",r:"#c67a48"};
+const GREEN="#7fb069";
+function artDesk(cx,cy){
+  return cuboid(cx,cy,0,0,0.40,0.32,0,11,WOOD)                 // 桌體
+       + cuboid(cx,cy,-0.10,-0.10,0.03,0.17,11,15,DARK)        // 螢幕
+       + poly([isoPt(cx,cy,-0.13,0.06,11),isoPt(cx,cy,0.06,0.06,11),isoPt(cx,cy,0.06,0.13,11),isoPt(cx,cy,-0.13,0.13,11)],"#c9c2b0"); // 鍵盤
+}
+function artChair(cx,cy){
+  return cuboid(cx,cy,0.04,0.04,0.20,0.20,0,9,WHITE)           // 椅面
+       + cuboid(cx,cy,-0.18,-0.18,0.03,0.20,9,13,WHITE);       // 椅背
+}
+function artPlant(cx,cy){
+  let s=cuboid(cx,cy,0,0,0.13,0.13,0,9,POT);
+  const p=isoPt(cx,cy,0,0,9);
+  s+=circ(p[0]-5,p[1]-8,7,GREEN)+circ(p[0]+5,p[1]-7,7,GREEN)+circ(p[0],p[1]-14,8,GREEN);
+  return s;
+}
+function artTree(cx,cy){
+  let s=cuboid(cx,cy,0,0,0.15,0.15,0,11,POT);
+  const p=isoPt(cx,cy,0,0,11);
+  s+=circ(p[0]-8,p[1]-12,10,"#6fa25a")+circ(p[0]+8,p[1]-12,10,"#6fa25a")+circ(p[0],p[1]-22,12,GREEN)+circ(p[0],p[1]-10,10,"#79ac62");
+  return s;
+}
+function artSofa(cx,cy){
+  return cuboid(cx,cy,0,0,0.34,0.44,0,9,WHITE)                 // 座
+       + cuboid(cx,cy,-0.28,0,0.07,0.44,9,13,WHITE)            // 靠背
+       + cuboid(cx,cy,0,-0.40,0.34,0.06,9,11,WHITE)            // 扶手
+       + cuboid(cx,cy,0,0.40,0.34,0.06,9,11,WHITE);
+}
+function artCrate(cx,cy){ return cuboid(cx,cy,0,0,0.28,0.28,0,16,WOOD); }
+function artPrinter(cx,cy){
+  return cuboid(cx,cy,0,0,0.26,0.22,0,13,GREY)
+       + poly([isoPt(cx,cy,-0.2,0.1,9),isoPt(cx,cy,0.2,0.1,9),isoPt(cx,cy,0.2,0.12,9),isoPt(cx,cy,-0.2,0.12,9)],"#8a8a90");
+}
+function artTrophy(cx,cy){
+  let s=cuboid(cx,cy,0,0,0.14,0.14,0,6,DARK);
+  const p=isoPt(cx,cy,0,0,6);
+  s+=poly([[p[0]-8,p[1]-2],[p[0]+8,p[1]-2],[p[0]+5,p[1]-16],[p[0]-5,p[1]-16]],GOLD.t);
+  s+=`<path d="M${p[0]-8},${p[1]-4} q-8,-2 -6,-10" fill="none" stroke="#1d1d1d" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`;
+  s+=`<path d="M${p[0]+8},${p[1]-4} q8,-2 6,-10" fill="none" stroke="#1d1d1d" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`;
+  return s;
+}
+function artBoard(cx,cy){
+  return cuboid(cx,cy,0,0,0.05,0.30,4,30,WHITE)                // 面板/簡報架
+       + poly([isoPt(cx,cy,0.02,-0.28,0),isoPt(cx,cy,0.02,-0.10,0),isoPt(cx,cy,0.02,-0.10,4),isoPt(cx,cy,0.02,-0.28,4)],"#b7ab8c");
+}
+function artCoffee(cx,cy){
+  let s=cuboid(cx,cy,0,0,0.18,0.16,0,15,GREY);
+  const p=isoPt(cx,cy,0.06,0.1,3);
+  s+=circ(p[0],p[1],3.5,"#fff");
+  return s;
+}
+function artBed(cx,cy){
+  return cuboid(cx,cy,0,0,0.44,0.36,0,7,WOOD)
+       + cuboid(cx,cy,0,0,0.40,0.32,7,5,WHITE)                 // 床墊
+       + cuboid(cx,cy,-0.34,0,0.05,0.30,7,12,WHITE);           // 枕/床頭
+}
+const ART={
+  "🖥️":artDesk,"💻":artDesk,
+  "🪑":artChair,
+  "🪴":artPlant,"🌿":artPlant,"🌸":artPlant,
+  "🌳":artTree,
+  "🛋️":artSofa,
+  "📦":artCrate,"🧵":artCrate,"🪚":artCrate,
+  "🖨️":artPrinter,
+  "🏆":artTrophy,
+  "📊":artBoard,"📽️":artBoard,"🖼️":artBoard,"🪟":artBoard,"🧩":artBoard,
+  "☕":artCoffee,"🧃":artCoffee,
+  "🛏️":artBed,
+};
 function drawDecor(){
   const list=[...FLOOR.decor].sort((a,b)=>(a.x+a.y)-(b.x+b.y));
-  layers.decor.innerHTML = list.map(d=>emojiText(d.x,d.y,d.em,(d.size||30)+2)).join("");
+  layers.decor.innerHTML = list.map(d=>{
+    const fn=ART[d.em];
+    if(fn){ const cx=isoX(d.x,d.y), cy=isoY(d.x,d.y); return `<g>${entShadow(d.x,d.y)}${fn(cx,cy)}</g>`; }
+    return emojiText(d.x,d.y,d.em,(d.size||30)+2);
+  }).join("");
 }
 function drawLabels(){
   layers.label.innerHTML = FLOOR.zones.map(z=>{
