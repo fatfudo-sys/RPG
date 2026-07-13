@@ -696,7 +696,7 @@ function freshState(){
   return {
     level:1, exp:0, rep:0, cash:0, energy:100, tasksDone:0,
     skills:Object.fromEntries(SKILL_KEYS.map(k=>[k,{lv:1,xp:0}])),
-    quest:null, npcQuestReady:{},
+    quest:null, npcQuestReady:{}, npcTaskCount:{},
     seen:{}, ver:4,
     px:3, py:14, floor:1, maxFloor:1,
     city:"tpe", cityFloor:{}, cities:{tpe:true}, team:[],
@@ -756,6 +756,20 @@ function abbr(n){
 }
 function fmt(n){ return abbr(n); }
 function diffStars(d){ return d<=5 ? "⭐".repeat(d) : "⭐×"+d; }
+/* ---------- 專案評級與難度量化 ---------- */
+const GRADE_N=10;   // F D C B A S SS SSS SSSS SSSSS
+const LOG2=Math.log10(2), LOG8=Math.log10(8);
+function abbrLog10(L){ if(!isFinite(L)) return "∞"; if(L<3) return Math.round(Math.pow(10,L)).toLocaleString('en-US'); const tier=Math.floor(L/3); const mant=Math.pow(10,L-tier*3); const suf=tier<NUM_SUFFIX.length?NUM_SUFFIX[tier]:alphaSuffix(tier-NUM_SUFFIX.length); return mant.toFixed(2)+suf; }
+function cityBaseDiff(k){ return Math.pow(8, 2*k+1); }               // 台北 8；換地區 1F=8³=512…
+function questDiff(cityId,floor,repeat){ return cityBaseDiff(cityIndex(cityId)) * Math.pow(10,floor-1) * Math.pow(2,repeat); }
+function gradeValueLog10(g){ return 3*Math.pow(2,g)*LOG2; }          // log10( 2^(3·2^g) )：F=8, D=64, C=4096…
+function gradeValueStr(g){ return abbrLog10(gradeValueLog10(g)); }
+function ratingPoints(){ let p=0; for(const k of SKILL_KEYS) p+=S.skills[k].lv; return p; } // 技能 Lv → 點
+function gradeFromScore(pts, diff, primaryLv){
+  const budget = Math.log10(Math.max(1,pts+(primaryLv||0))) - Math.log10(Math.max(1,diff)) + LOG8;
+  let g=0; for(let i=0;i<GRADE_N;i++){ if(gradeValueLog10(i)<=budget+1e-9) g=i; }
+  return g;
+}
 
 /* ========================================================================
    audio (WebAudio synth, no external files)
@@ -1267,7 +1281,7 @@ function openFloorSelect(){
     rows.push(`<div class="achrow ${locked?'locked':''}" style="${cur?'border-color:#5aa9ff;background:#12203a':''}">
       <div class="ae">${locked?'🔒':(cur?'📍':'🛗')}</div>
       <div style="flex:1"><div class="an">${name} ${cur?'<span style="color:var(--blue)">(所在)</span>':''}</div>
-        <div class="ad">${locked?('需 Lv'+req+' 解鎖'):('回報 ×'+(floorBonus(n)*cityBonus(curCity)).toFixed(2)+' · 難度 +'+floorDiffBonus(n))}</div></div>
+        <div class="ad">${locked?('需 Lv'+req+' 解鎖'):('回報 ×'+(floorBonus(n)*cityBonus(curCity)).toFixed(2)+' · 起始難度 ⚙️'+abbr(questDiff(curCity,n,0)))}</div></div>
       ${locked?'':`<button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${cur?'opacity:.4':''}" ${cur?'disabled':''} onclick="switchFloor(${n})">前往</button>`}
     </div>`);
   }
@@ -1358,16 +1372,19 @@ function makeQuest(npc){
   const adj = ADJ[Math.floor(Math.random()*ADJ.length)];
   const client = CLIENTS[Math.floor(Math.random()*CLIENTS.length)];
   const fb = floorBonus(curFloor) * cityBonus(curCity);   // 樓層 × 城市回報
-  const diff = 1 + Math.floor(Math.random()*3) + floorDiffBonus(curFloor);
-  const goal = Math.floor((40 + diff*30) * (1+ (S.level-1)*0.12));
-  const expR = Math.floor(expNeed(S.level)*(0.35+diff*0.22)*fb);
-  const repR = Math.floor((6+diff*7) * (1+(S.level-1)*0.06) * fb);
-  const mktM=(1+(statVal("mkt")-1)*0.05)*(S.perk==="ppt"?1.15:1);   // 市場能力 + PPT王牌
-  const cashR= Math.floor(salary()/22 * diff * (0.8+Math.random()*0.6) * fb * fameMult() * legacyMult() * mktM);
-  const skR  = Math.floor(skillXpNeed(S.skills[npc.spec].lv)*(0.5+diff*0.3));
+  const repeat = (S.npcTaskCount&&S.npcTaskCount[npc.id])||0;   // 同一人接第幾次（每次難度×2）
+  const diff = questDiff(curCity, curFloor, repeat);            // 量化難度
+  const dlog = Math.log2(diff+1);
+  const goal = Math.floor(55 * (1 + dlog*0.45) * (1+(S.level-1)*0.06));
+  const dmag = Math.sqrt(diff);                                 // 阻尼後難度（回報用）
+  const expR = Math.floor(expNeed(S.level)*(0.4 + dlog*0.05)*fb);
+  const repR = Math.floor((6 + dlog*3) * (1+(S.level-1)*0.06) * fb);
+  const mktM = (1+(statVal("mkt")-1)*0.05)*(S.perk==="ppt"?1.15:1);   // 市場能力 + PPT王牌
+  const cashR= Math.floor(salary()/14 * dmag * (0.8+Math.random()*0.5) * fb * fameMult() * legacyMult() * mktM);
+  const skR  = Math.floor(skillXpNeed(S.skills[npc.spec].lv)*(0.6 + dlog*0.06));
   return {
     npc:npc.id, npcName:npc.name, npcFace:npc.face,
-    title:`${adj}${pn}`, emoji:pe, client, diff,
+    title:`${adj}${pn}`, emoji:pe, client, diff, repeat,
     skill:npc.spec, goal, prog:0,
     rewards:{exp:expR, rep:repR, cash:cashR, skill:skR},
   };
@@ -1447,7 +1464,7 @@ function offerBlock(q){
   return `<div class="offer">
      <div class="row"><span>${q.emoji} 專案</span><span>${q.title}</span></div>
      <div class="row"><span>客戶</span><span>${q.client}</span></div>
-     <div class="row"><span>難度</span><span>${diffStars(q.diff)}</span></div>
+     <div class="row"><span>難度</span><span>⚙️ ${abbr(q.diff)}${q.repeat?` <span style="color:var(--red)">(同人×${q.repeat+1})</span>`:''}</span></div>
      <div class="row"><span>主要技能</span><span>${SKILLS[q.skill].em} ${SKILLS[q.skill].name}</span></div>
      <hr style="border-color:#2a3346;border-style:dashed;margin:8px 0">
      <div class="row"><span>報酬</span><span style="color:var(--gold)">💰 $${fmt(effCash)}</span></div>
@@ -1486,7 +1503,7 @@ function renderTask(){
     const sk=S.skills[q.skill];
     body.innerHTML=`
       <div class="qt">${q.emoji} ${q.title}</div>
-      <div class="qsub">${q.client} · ${diffStars(q.diff)} · 主技能 ${SKILLS[q.skill].em}${SKILLS[q.skill].name} Lv${sk.lv}</div>
+      <div class="qsub">${q.client} · 難度 ⚙️${abbr(q.diff)} · 主技能 ${SKILLS[q.skill].em}${SKILLS[q.skill].name} Lv${sk.lv}</div>
       <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
       <div class="qmeta"><span>進度 ${Math.floor(pct)}%</span><span>💰$${fmt(q.rewards.cash*cashMult())} · ⭐${Math.floor(q.rewards.exp*xpMult())}</span></div>
       <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力設計！ <span style="font-size:11px">(⚡${sprintCost()})</span></button>
@@ -1567,16 +1584,14 @@ const DEPTS=[
   {key:"proc",  em:"📦", name:"採購",  skills:["material"]},
   {key:"boss",  em:"👔", name:"BOSS",  skills:SKILL_KEYS,           boss:true},
 ];
-function deptTier(d,q){
+// 各部門評分：以量化總評 overallT 為基準，依部門專長技能高低上下浮動
+function deptTier(d, overallT, pts){
   const sk=d.skills.reduce((a,k)=>a+S.skills[k].lv,0)/d.skills.length;
-  let v=sk*1.1 - q.diff*1.3 + (Math.random()*4-1.2);
-  v += (statVal("aes")-1)*0.2;                                  // 美感：全面加分
-  if(d.fame) v+=Math.log10((S.followers||0)+10) + (statVal("mkt")-1)*0.2;
-  if(d.boss) v+=(S.rep||0)/800 + coopLevel()/50 + (statVal("design")-1)*0.15;
-  if(d.key==="eng"||d.key==="proc") v+=(statVal("eng")-1)*0.25;
-  if(d.key==="sales"||d.key==="mkt") v+=(statVal("mkt")-1)*0.2;
-  v += perkDept(d.key);                                         // 固有技能
-  return Math.max(0, Math.min(PRES.length-1, Math.round(3+v*0.35)));
+  const avg=Math.max(1, pts/SKILL_KEYS.length);
+  let delta=(sk-avg)/avg*1.4 + perkDept(d.key) + (Math.random()*1.6-0.8);
+  if(d.fame) delta+=(statVal("mkt")-1)*0.15;
+  if(d.boss) delta+=(statVal("design")-1)*0.12;
+  return Math.max(0, Math.min(GRADE_N-1, Math.round(overallT+delta)));
 }
 /* ---------- 社交關係／辦公室戀愛 ---------- */
 const TIES=["同事","大學同學","學長","學弟妹","業界前輩","健身夥伴"];
@@ -1586,13 +1601,17 @@ function isSchoolTie(id){ const t=socialTie(id); return t==="大學同學"||t===
 function completeQuest(){
   const q=S.quest; S.quest=null;
   const self=!!q.selfMade;
-  // 各部門發表評分
-  const reviews=DEPTS.map(d=>({d, t:deptTier(d,q)}));
-  const overallT=Math.round(reviews.reduce((a,r)=>a+r.t,0)/reviews.length);
+  // 量化評級：技能點數 vs 難度 → 總評級 overallT
+  const primary = self ? (q.steps[Math.min(q.step,q.steps.length-1)]||{}).skill : q.skill;
+  const pts = ratingPoints();
+  const primaryLv = primary ? S.skills[primary].lv : 0;
+  const overallT = gradeFromScore(pts, q.diff||8, primaryLv);
+  const reviews=DEPTS.map(d=>({d, t:deptTier(d, overallT, pts)}));
   const P=PRES[overallT];
   S.bestPres=Math.max(S.bestPres||0, overallT);
   const grade = overallT<=2?"C" : overallT===3?"B" : overallT===4?"A" : "S";
   if(grade==="S") S.sworks=(S.sworks||0)+1;
+  if(q.npc){ if(!S.npcTaskCount) S.npcTaskCount={}; S.npcTaskCount[q.npc]=(S.npcTaskCount[q.npc]||0)+1; } // 同人下次難度×2
   const selfBonus=self?1.6:1;
   const cash=Math.floor(q.rewards.cash*cashMult()*fxMult("cash")*dailyMult("cash")*P.mult*selfBonus);
   const exp =Math.floor(q.rewards.exp*xpMult()*fxMult("xp")*dailyMult("xp")*P.mult);
@@ -1612,14 +1631,19 @@ function completeQuest(){
   log(`📣 發表 ${tag}${q.emoji}「${q.title}」總評 <b style="color:${P.col}">${P.g}</b> → 💰$${fmt(cash)} 🏆+${rep} ⭐+${exp}${viral?' 🔥爆紅!':''}`, viral?"y":"g");
   floatText(P.g+" 發表!", P.col, 24); sfx(viral?"rank":"complete");
   gainExp(exp);
-  showPresentation(q, reviews, P, {cash,rep,exp}, work);
+  showPresentation(q, reviews, P, {cash,rep,exp}, work, overallT, pts);
   renderTask(); drawNpcs(); updateHUD(); checkAch(); save();
 }
-function showPresentation(q, reviews, P, rw, work){
+function showPresentation(q, reviews, P, rw, work, overallT, pts){
   const rows=reviews.map(r=>{ const pg=PRES[r.t];
     return `<div class="achrow"><div class="ae">${r.d.em}</div>
       <div style="flex:1"><div class="an">${r.d.name}部</div></div>
       <div style="font-weight:900;font-size:18px;color:${pg.col}">${pg.g}</div></div>`; }).join("");
+  const quant=`<div class="offer" style="margin-bottom:10px">
+     <div class="row"><span>專案難度</span><span>${abbr(q.diff||8)}${q.repeat?`（同人第 ${q.repeat+1} 次·×2）`:''}</span></div>
+     <div class="row"><span>評級點數（技能總和）</span><span style="color:var(--blue)">${abbr(pts)} 點</span></div>
+     <div class="row"><span>總評 ${P.g} 之數據量</span><span style="color:${P.col}">${gradeValueStr(overallT)}</span></div>
+   </div>`;
   const base=work.sales, f=[Math.floor(base*1.2),Math.floor(base*0.96),Math.floor(base*0.77)], mx=Math.max(...f,1);
   const bars=f.map((v,i)=>`<div style="flex:1;text-align:center">
      <div style="height:64px;display:flex;align-items:flex-end;justify-content:center">
@@ -1627,7 +1651,9 @@ function showPresentation(q, reviews, P, rw, work){
      <div style="font-size:11px;color:var(--dim);margin-top:4px">第 ${i+1} 月</div>
      <div style="font-size:12px;font-weight:700">$${fmt(v)}</div></div>`).join("");
   $("modal").innerHTML=`<h2>📣 設計發表會</h2>
-    <div style="font-size:13px;margin-bottom:8px">${work.emoji} <b>${q.title}</b> — 各部門評分</div>
+    <div style="font-size:13px;margin-bottom:8px">${work.emoji} <b>${q.title}</b></div>
+    ${quant}
+    <div style="font-size:12px;color:var(--dim);margin-bottom:4px">各部門評分</div>
     <div class="achlist">${rows}</div>
     <div style="text-align:center;margin:12px 0">總評　<b style="font-size:28px;color:${P.col}">${P.g}</b>${work.viral?'　🔥爆紅！':''}</div>
     <div style="font-size:12px;color:var(--dim);margin-bottom:4px">📈 開賣三個月預估銷售</div>
@@ -2150,10 +2176,11 @@ function startSelfDev(){
   if(S.quest){ toast("先完成目前專案"); sfx("bad"); return; }
   const [pn,pe]=PRODUCTS[Math.floor(Math.random()*PRODUCTS.length)];
   const adj=ADJ[Math.floor(Math.random()*ADJ.length)];
-  const goalPer=Math.floor(55*(1+(S.level-1)*0.12));
+  const diff=questDiff(curCity,curFloor,0)*1.5;                 // 自主研發難度略高
+  const goalPer=Math.floor(50*(1+Math.log2(diff+1)*0.4)*(1+(S.level-1)*0.06));
   S.quest={ selfMade:true, step:0, steps:DEV_STEPS, title:adj+pn, emoji:pe, client:"自主研發",
-    diff:3, goal:goalPer, prog:0, npc:null, npcName:"自主研發",
-    rewards:{ cash:Math.floor(salary()/7), exp:Math.floor(expNeed(S.level)*1.3), rep:Math.floor(28+S.level*2), skill:0 } };
+    diff, repeat:0, goal:goalPer, prog:0, npc:null, npcName:"自主研發",
+    rewards:{ cash:Math.floor(salary()/7*Math.sqrt(diff)), exp:Math.floor(expNeed(S.level)*1.3), rep:Math.floor(28+S.level*2), skill:0 } };
   closeModal(); renderTask(); sfx("accept");
   log(`🚀 啟動自主研發「${adj}${pn}」！需獨力完成 ${DEV_STEPS.length} 個階段，成品 100% 歸你。`,"pu"); save();
 }
@@ -2661,6 +2688,7 @@ function load(){
     if(typeof S.prestige!=="number") S.prestige=0;
     if(S.partner===undefined) S.partner=null;
     if(typeof S.bestPres!=="number") S.bestPres=0;
+    if(!S.npcTaskCount) S.npcTaskCount={};
     if(!S.school){ S.school="self"; S.stats={stam:3,spd:3,design:3,aes:3,eng:3,mkt:3}; S.perk=null; }  // 舊存檔：自學者(均衡D)
     if(!S.equip) S.equip={tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0};
     if(!S.rel) S.rel={};
