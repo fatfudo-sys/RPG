@@ -1601,15 +1601,22 @@ const DEPTS=[
   {key:"proc",  em:"📦", name:"採購",  skills:["material"]},
   {key:"boss",  em:"👔", name:"BOSS",  skills:SKILL_KEYS,           boss:true},
 ];
-// 各部門評分：以量化總評 overallT 為基準，依部門專長技能高低上下浮動
-function deptTier(d, overallT, pts){
-  const sk=d.skills.reduce((a,k)=>a+S.skills[k].lv,0)/d.skills.length;
-  const avg=Math.max(1, pts/SKILL_KEYS.length);
-  let delta=(sk-avg)/avg*1.4 + perkDept(d.key) + (Math.random()*1.6-0.8);
-  if(d.fame) delta+=(statVal("mkt")-1)*0.15;
-  if(d.boss) delta+=(statVal("design")-1)*0.12;
-  return Math.max(0, Math.min(GRADE_N-1, Math.round(overallT+delta)));
+// 各部門依「個人能力等級」取得評分百分比（50%～200%）
+function deptPct(d){
+  const lv=d.skills.reduce((a,k)=>a+S.skills[k].lv,0)/d.skills.length;
+  let pct=55 + lv*3.6;                                    // 能力越高分數越高
+  pct += (statVal("aes")-1)*2;                            // 美感全面加分
+  if(d.fame) pct += (statVal("mkt")-1)*3 + Math.log10((S.followers||0)+10)*4;
+  if(d.boss) pct += (S.rep||0)/2000 + coopLevel()*0.2 + (statVal("design")-1)*2;
+  if(d.key==="eng"||d.key==="proc") pct += (statVal("eng")-1)*3;
+  if(d.key==="sales"||d.key==="mkt") pct += (statVal("mkt")-1)*3;
+  pct += perkDept(d.key)*12;                              // 固有技能
+  if(S.partner) pct += 4;                                 // 戀愛加成
+  pct += (Math.random()*16-8);                            // ±8 臨場
+  return clamp(pct, 50, 200);
 }
+const PCT_TH=[-1e9, 62, 82, 100, 120, 140, 160, 175, 190, 205];  // 最終評分% → 級別(F..SSSSS)
+function gradeFromPct(s){ let g=0; for(let i=0;i<GRADE_N;i++) if(s>=PCT_TH[i]) g=i; return g; }
 /* ---------- 社交關係／辦公室戀愛 ---------- */
 const TIES=["同事","大學同學","學長","學弟妹","業界前輩","健身夥伴"];
 function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
@@ -1618,12 +1625,16 @@ function isSchoolTie(id){ const t=socialTie(id); return t==="大學同學"||t===
 function completeQuest(){
   const q=S.quest; S.quest=null;
   const self=!!q.selfMade;
-  // 量化評級：技能點數 vs 難度 → 總評級 overallT
-  const primary = self ? (q.steps[Math.min(q.step,q.steps.length-1)]||{}).skill : q.skill;
+  // 各部門依能力取得評分% → 平均(最低項×3權重) − 難度分 = 專案最終評分
   const pts = ratingPoints();
-  const primaryLv = primary ? S.skills[primary].lv : 0;
-  const overallT = gradeFromScore(pts, q.diff||8, primaryLv);
-  const reviews=DEPTS.map(d=>({d, t:deptTier(d, overallT, pts)}));
+  const avgLv = pts/SKILL_KEYS.length;
+  const reviews = DEPTS.map(d=>{ const pct=deptPct(d); return {d, pct, t:gradeFromPct(pct)}; });
+  const vals = reviews.map(r=>r.pct);
+  const mn = Math.min(...vals);
+  const wavg = (vals.reduce((a,b)=>a+b,0) + 2*mn) / (vals.length + 2);   // 最低項 ×3 權重
+  const diffScore = Math.max(0, (Math.log2((q.diff||8)+1) - avgLv*0.55) * 6);  // 難度分
+  const finalScore = wavg - diffScore;
+  const overallT = gradeFromPct(finalScore);
   const P=PRES[overallT];
   S.bestPres=Math.max(S.bestPres||0, overallT);
   const grade = overallT<=2?"C" : overallT===3?"B" : overallT===4?"A" : "S";
@@ -1649,18 +1660,20 @@ function completeQuest(){
   log(`📣 發表 ${tag}${q.emoji}「${q.title}」總評 <b style="color:${P.col}">${P.g}</b> → 💰$${fmt(cash)} 🏆+${rep} ⭐+${exp}${viral?' 🔥爆紅!':''}`, viral?"y":"g");
   floatText(P.g+" 發表!", P.col, 24); sfx(viral?"rank":"complete");
   gainExp(exp);
-  showPresentation(q, reviews, P, {cash,rep,exp}, work, overallT, pts);
+  showPresentation(q, reviews, P, {cash,rep,exp}, work, {overallT, pts, wavg, diffScore, finalScore, mn});
   renderTask(); drawNpcs(); updateHUD(); checkAch(); save();
 }
-function showPresentation(q, reviews, P, rw, work, overallT, pts){
-  const rows=reviews.map(r=>{ const pg=PRES[r.t];
+function showPresentation(q, reviews, P, rw, work, info){
+  const rows=reviews.map(r=>{ const pg=PRES[r.t]; const low=Math.abs(r.pct-info.mn)<0.01;
     return `<div class="achrow"><div class="ae">${r.d.em}</div>
-      <div style="flex:1"><div class="an">${r.d.name}部</div></div>
-      <div style="font-weight:900;font-size:18px;color:${pg.col}">${pg.g}</div></div>`; }).join("");
+      <div style="flex:1"><div class="an">${r.d.name}部 ${low?'<span style="color:var(--red);font-size:11px">最弱×3</span>':''}</div></div>
+      <div style="text-align:right"><span style="font-size:13px;color:var(--dim)">${Math.round(r.pct)}%</span>
+        <b style="font-size:17px;color:${pg.col};margin-left:6px">${pg.g}</b></div></div>`; }).join("");
   const quant=`<div class="offer" style="margin-bottom:10px">
-     <div class="row"><span>專案難度</span><span>${abbr(q.diff||8)}${q.repeat?`（同人第 ${q.repeat+1} 次·×2）`:''}</span></div>
-     <div class="row"><span>評級點數（技能總和）</span><span style="color:var(--blue)">${abbr(pts)} 點</span></div>
-     <div class="row"><span>總評 ${P.g} 之數據量</span><span style="color:${P.col}">${gradeValueStr(overallT)}</span></div>
+     <div class="row"><span>加權平均（最低×3）</span><span style="color:var(--grn)">${info.wavg.toFixed(0)}%</span></div>
+     <div class="row"><span>專案難度 ${abbr(q.diff||8)} → 難度分</span><span style="color:var(--red)">− ${info.diffScore.toFixed(0)}</span></div>
+     <div class="row"><span>最終評分</span><span style="color:${P.col};font-weight:800">${info.finalScore.toFixed(0)}% → ${P.g}</span></div>
+     <div class="row"><span>總評 ${P.g} 之數據量</span><span style="color:${P.col}">${gradeValueStr(info.overallT)}</span></div>
    </div>`;
   const base=work.sales, f=[Math.floor(base*1.2),Math.floor(base*0.96),Math.floor(base*0.77)], mx=Math.max(...f,1);
   const bars=f.map((v,i)=>`<div style="flex:1;text-align:center">
