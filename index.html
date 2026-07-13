@@ -50,6 +50,11 @@
             background:transparent; transition:background 1s linear;}
   #hint{position:absolute; left:10px; bottom:10px; font-size:12px; color:var(--dim);
         background:rgba(13,17,23,.7); padding:5px 9px; border-radius:8px; pointer-events:none;}
+  #zoomCtrl{position:absolute; right:10px; bottom:10px; z-index:5; display:flex; flex-direction:column; gap:4px;}
+  #zoomCtrl button{width:34px; height:32px; border:1px solid #1d1d1d; background:#fffdf5; color:#2a2418;
+        font-size:17px; font-weight:800; border-radius:9px; cursor:pointer; box-shadow:0 2px 6px rgba(90,70,40,.25); padding:0;}
+  #zoomCtrl #zoomLbl{font-size:11px; font-weight:700; height:24px;}
+  #zoomCtrl button:active{transform:scale(.94);}
   #zoneTag{position:absolute; left:10px; top:10px; font-size:14px; font-weight:700; z-index:4;
            background:rgba(13,17,23,.65); padding:6px 12px; border-radius:20px; border:1px solid var(--line);
            pointer-events:none; transition:opacity .3s;}
@@ -178,7 +183,12 @@
       <div id="zoneTag">你的座位</div>
       <div id="daynight"></div>
       <svg id="stage" preserveAspectRatio="xMidYMid slice"></svg>
-      <div id="hint">🖱️ 點地圖走動 · 點 NPC💬 接任務 · 🛗 電梯選樓層(越高越強) · 🛒商店 🏁競圖 · WASD 也可</div>
+      <div id="hint">🖱️ 點走動 · 點 NPC💬 接任務 · 🛗 換樓層 · 滾輪/雙指縮放 · WASD 也可</div>
+      <div id="zoomCtrl">
+        <button id="zoomIn" title="放大">＋</button>
+        <button id="zoomLbl" title="重設縮放">100%</button>
+        <button id="zoomOut" title="縮小">－</button>
+      </div>
     </div>
 
     <div id="side">
@@ -1091,6 +1101,7 @@ function reveal(cx,cy){
    ===================================================================== */
 let px = isoX(3,14), py = isoY(3,14);
 let camX = px, camY = py;
+let zoom = 1, baseVW = 0, baseVH = 0, worldCX = 0, worldCY = 0;
 let path = [];
 let pendingNpc = null, pendingElev = false, pendingFac = null;
 let bob = 0, stepCount = 0;
@@ -1162,6 +1173,7 @@ function goToFac(type){
 }
 
 stage.addEventListener("click", e=>{
+  if(_suppressClick){ _suppressClick=false; return; }   // 剛做過雙指縮放，不觸發移動
   const p = svgPoint(e);
   // 反投影：世界座標 → 格子座標
   const u=p.x/(TW/2), v=p.y/(TH/2);
@@ -1212,6 +1224,11 @@ function tick(){
     } else { px += dx/dist*SPEED; py += dy/dist*SPEED; }
     bob += 0.35;
   } else { bob = 0; }
+  // 攝影機：放大時跟隨玩家，1x 時置中全室
+  const tzX = zoom>1.01 ? px : worldCX;
+  const tzY = zoom>1.01 ? py : worldCY;
+  camX += (tzX-camX)*0.12; camY += (tzY-camY)*0.12;
+  applyView();
   const yoff = Math.sin(bob)*2.5;
   if(playerEl) playerEl.setAttribute("transform", `translate(${px},${py+yoff})`);
   requestAnimationFrame(tick);
@@ -2721,14 +2738,39 @@ function fitViewport(){
   const r=$("stageWrap").getBoundingClientRect();
   const wb=worldBounds();
   const worldW=(wb.maxX-wb.minX)+70, worldH=(wb.maxY-wb.minY)+70;
-  const cx=(wb.minX+wb.maxX)/2, cy=(wb.minY+wb.maxY)/2;
+  worldCX=(wb.minX+wb.maxX)/2; worldCY=(wb.minY+wb.maxY)/2;
   const aspect=(r.width/r.height)||1.4;
-  let vw,vh;
-  if(worldW/worldH > aspect){ vw=worldW; vh=vw/aspect; } else { vh=worldH; vw=vh*aspect; }
-  camX=cx; camY=cy;
-  stage.setAttribute("viewBox", `${cx-vw/2} ${cy-vh/2} ${vw} ${vh}`);
+  if(worldW/worldH > aspect){ baseVW=worldW; baseVH=worldW/aspect; } else { baseVH=worldH; baseVW=worldH*aspect; }
+  applyView();
 }
+function applyView(){
+  if(!baseVW) return;
+  const vw=baseVW/zoom, vh=baseVH/zoom, hw=vw/2, hh=vh/2;
+  const wb=worldBounds(), roomW=wb.maxX-wb.minX, roomH=wb.maxY-wb.minY;
+  let cx=camX, cy=camY;
+  cx = (vw>=roomW) ? worldCX : clamp(cx, wb.minX+hw, wb.maxX-hw);
+  cy = (vh>=roomH) ? worldCY : clamp(cy, wb.minY+hh, wb.maxY-hh);
+  stage.setAttribute("viewBox", `${cx-hw} ${cy-hh} ${vw} ${vh}`);
+}
+function setZoom(z, focusPx, focusPy){
+  const old=zoom; zoom=clamp(z, 1, 6);
+  if(zoom<=1.01){ zoom=1; }
+  // 以焦點為中心縮放（游標處）：把攝影機朝焦點推近
+  if(focusPx!=null && zoom>1){ camX += (focusPx-camX)*(1-old/zoom)*0.6; camY += (focusPy-camY)*(1-old/zoom)*0.6; }
+  applyView(); updateZoomLabel();
+}
+function zoomBy(f){ setZoom(zoom*f); }
+function updateZoomLabel(){ const el=$("zoomLbl"); if(el) el.textContent=Math.round(zoom*100)+"%"; }
 window.addEventListener("resize", fitViewport);
+// 滾輪縮放
+stage.addEventListener("wheel", e=>{ e.preventDefault(); const p=svgPoint(e); setZoom(zoom*Math.exp(-e.deltaY*0.0016), p.x, p.y); }, {passive:false});
+// 觸控雙指縮放
+const _ptrs=new Map(); let _pinch=0, _suppressClick=false;
+stage.addEventListener("pointerdown", e=>{ _ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); });
+stage.addEventListener("pointermove", e=>{ if(!_ptrs.has(e.pointerId)) return; _ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(_ptrs.size===2){ const [a,b]=[..._ptrs.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); if(_pinch) setZoom(zoom*(d/_pinch)); _pinch=d; _suppressClick=true; } });
+function _ptrEnd(e){ _ptrs.delete(e.pointerId); if(_ptrs.size<2) _pinch=0; }
+stage.addEventListener("pointerup", _ptrEnd); stage.addEventListener("pointercancel", _ptrEnd);
 
 /* ========================================================================
    boot
@@ -2760,6 +2802,9 @@ $("bagChip").addEventListener("click", openBag);
 $("dayChip").addEventListener("click", ()=>{ toast(S.daily?`${S.daily.em} ${S.daily.name}：${S.daily.desc}`:"新的一天"); });
 $("restChip").addEventListener("click", doRest);
 $("compChip").addEventListener("click", openComp);
+$("zoomIn").addEventListener("click", ()=>zoomBy(1.35));
+$("zoomOut").addEventListener("click", ()=>zoomBy(1/1.35));
+$("zoomLbl").addEventListener("click", ()=>setZoom(1));
 $("worldChip").addEventListener("click", openWorld);
 $("teamChip").addEventListener("click", openTeam);
 $("fanChip").addEventListener("click", openSocial);
