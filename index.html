@@ -706,7 +706,7 @@ function freshState(){
   return {
     level:1, exp:0, rep:0, cash:0, energy:100, tasksDone:0,
     skills:Object.fromEntries(SKILL_KEYS.map(k=>[k,{lv:1,xp:0}])),
-    quest:null, npcQuestReady:{}, npcTaskCount:{},
+    quest:null, npcQuestReady:{}, npcTaskCount:{}, selfDevCount:0,
     seen:{}, ver:4,
     px:3, py:14, floor:1, maxFloor:1,
     city:"tpe", cityFloor:{}, cities:{tpe:true}, team:[],
@@ -1510,7 +1510,7 @@ function renderTask(){
     const dots=q.steps.map((s,i)=>`<span style="opacity:${i<q.step?1:i===q.step?1:0.3};font-size:15px">${i<q.step?'✅':s.em}</span>`).join(" ");
     body.innerHTML=`
       <div class="qt">🚀 ${q.emoji} ${q.title} <span style="font-size:11px;color:var(--purple)">自主研發</span></div>
-      <div class="qsub">STEP ${q.step+1}/${q.steps.length} · ${st.em} ${st.name} · ${SKILLS[st.skill].em}${SKILLS[st.skill].name} Lv${sk.lv}</div>
+      <div class="qsub">STEP ${q.step+1}/${q.steps.length} · ${st.em} ${st.name} · 難度 ⚙️${abbr(q.diff)}${q.repeat?` <span style="color:var(--red)">(第${q.repeat+1}件×2)</span>`:''}</div>
       <div style="margin:4px 0 6px">${dots}</div>
       <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
       <div class="qmeta"><span>本階段 ${Math.floor(pct)}%</span><span>完成 💰$${fmt(q.rewards.cash*cashMult())} · 100% 分紅</span></div>
@@ -1629,6 +1629,7 @@ function completeQuest(){
   const grade = overallT<=2?"C" : overallT===3?"B" : overallT===4?"A" : "S";
   if(grade==="S") S.sworks=(S.sworks||0)+1;
   if(q.npc){ if(!S.npcTaskCount) S.npcTaskCount={}; S.npcTaskCount[q.npc]=(S.npcTaskCount[q.npc]||0)+1; } // 同人下次難度×2
+  if(self){ S.selfDevCount=(S.selfDevCount||0)+1; } // 自主研發每做一次，下次難度×2
   const selfBonus=self?1.6:1;
   const cash=Math.floor(q.rewards.cash*cashMult()*fxMult("cash")*dailyMult("cash")*P.mult*selfBonus);
   const exp =Math.floor(q.rewards.exp*xpMult()*fxMult("xp")*dailyMult("xp")*P.mult);
@@ -2021,7 +2022,7 @@ function openFac(type){
   if(type==="desk"){
     action += S.quest
       ? `<div style="font-size:12px;color:var(--dim);text-align:center;margin-top:8px">（完成目前專案後可自主研發新產品）</div>`
-      : `<button class="btn" style="margin-top:8px;background:linear-gradient(90deg,#b085ff,#5aa9ff)" onclick="startSelfDev()">🚀 自主研發新產品</button>`;
+      : `<button class="btn" style="margin-top:8px;background:linear-gradient(90deg,#b085ff,#5aa9ff)" onclick="startSelfDev()">🚀 自主研發新產品<span style="font-size:11px"><br>第 ${(S.selfDevCount||0)+1} 件 · 難度 ⚙️${abbr(questDiff(curCity,curFloor,S.selfDevCount||0)*1.5)}</span></button>`;
   }
   $("modal").innerHTML=`<div class="who"><div class="face">${f.em}</div>
       <div><div class="nm">${f.name} <span style="color:var(--blue)">Lv${lv}</span></div>
@@ -2193,13 +2194,14 @@ function startSelfDev(){
   if(S.quest){ toast("先完成目前專案"); sfx("bad"); return; }
   const [pn,pe]=PRODUCTS[Math.floor(Math.random()*PRODUCTS.length)];
   const adj=ADJ[Math.floor(Math.random()*ADJ.length)];
-  const diff=questDiff(curCity,curFloor,0)*1.5;                 // 自主研發難度略高
+  const cnt=S.selfDevCount||0;                                  // 已完成自主研發次數
+  const diff=questDiff(curCity,curFloor,cnt)*1.5;               // 每做一次難度 ×2（略高於一般案）
   const goalPer=Math.floor(50*(1+Math.log2(diff+1)*0.4)*(1+(S.level-1)*0.06));
   S.quest={ selfMade:true, step:0, steps:DEV_STEPS, title:adj+pn, emoji:pe, client:"自主研發",
-    diff, repeat:0, goal:goalPer, prog:0, npc:null, npcName:"自主研發",
+    diff, repeat:cnt, goal:goalPer, prog:0, npc:null, npcName:"自主研發",
     rewards:{ cash:Math.floor(salary()/7*Math.sqrt(diff)), exp:Math.floor(expNeed(S.level)*1.3), rep:Math.floor(28+S.level*2), skill:0 } };
   closeModal(); renderTask(); sfx("accept");
-  log(`🚀 啟動自主研發「${adj}${pn}」！需獨力完成 ${DEV_STEPS.length} 個階段，成品 100% 歸你。`,"pu"); save();
+  log(`🚀 啟動自主研發「${adj}${pn}」（第 ${cnt+1} 件，難度 ⚙️${abbr(diff)}）！需獨力完成 ${DEV_STEPS.length} 個階段，成品 100% 歸你。`,"pu"); save();
 }
 
 /* ========================================================================
@@ -2706,6 +2708,7 @@ function load(){
     if(S.partner===undefined) S.partner=null;
     if(typeof S.bestPres!=="number") S.bestPres=0;
     if(!S.npcTaskCount) S.npcTaskCount={};
+    if(typeof S.selfDevCount!=="number") S.selfDevCount=0;
     if(!S.school){ S.school="self"; S.stats={stam:3,spd:3,design:3,aes:3,eng:3,mkt:3}; S.perk=null; }  // 舊存檔：自學者(均衡D)
     if(!S.equip) S.equip={tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0};
     if(!S.rel) S.rel={};
