@@ -313,8 +313,8 @@ const SCHOOLS=[
   {id:"night",   name:"夜間部極限生存學苑",     st:["A","B","D","D","D","D"], perk:"caffeine",  skill:"咖啡因免疫", sdesc:"精力回復加成，衝刺無視精力不足。",                 style:"半工半讀、退件煉獄，活下來的怪物。"},
 ];
 function schoolById(id){ return SCHOOLS.find(s=>s.id===id); }
-function agiMult(){ return (1+(statVal("spd")-1)*0.06) * (S.perk==="speed"?1.2:1); }
-function sprintCost(){ return S.perk==="speed"?3:6; }
+function agiMult(){ return (1+(statVal("spd")-1)*0.06) * (S.perk==="speed"?1.2:1) * (1+gearSpd()); }
+function sprintCost(){ return Math.max(2, Math.round((S.perk==="speed"?3:6) - gearPwr()*3)); }
 function perkDept(key){
   const p=S.perk;
   if(p==="muse"&&(key==="mkt"||key==="boss")) return 1;
@@ -428,14 +428,36 @@ const AWARDS = [
 ];
 const YEAR_DAYS = 12;   // 年度設計師選舉週期（每 12 天）
 /* ---------- self-developed product pipeline (獨立完成每個 STEP) ---------- */
+// 設計思考 Design Thinking 五階段（自主研發流程）
 const DEV_STEPS = [
-  {name:"市場研究", skill:"ux",       em:"🔎"},
-  {name:"概念草圖", skill:"sketch",   em:"✏️"},
-  {name:"3D 建模",  skill:"cad",      em:"🖥️"},
-  {name:"外觀渲染", skill:"render",   em:"🎨"},
-  {name:"原型打樣", skill:"material", em:"🔬"},
-  {name:"提案上市", skill:"present",  em:"📊"},
+  {name:"同理 Empathize", skill:"ux",       em:"❤️", desc:"觀察與訪談，設身處地了解使用者真正需求與情感"},
+  {name:"定義 Define",    skill:"present",  em:"🎯", desc:"收斂資訊，精準定義核心問題所在"},
+  {name:"發想 Ideate",    skill:"sketch",   em:"💡", desc:"不設限腦力激盪，產出多樣創新點子"},
+  {name:"原型 Prototype", skill:"material", em:"🔨", desc:"將想法具體化，做出低成本初步模型"},
+  {name:"測試 Test",      skill:"render",   em:"🧪", desc:"交使用者測試，收集反饋反覆迭代"},
 ];
+/* ---------- 產品分類（不同能力組合） ---------- */
+const CATS = {
+  lifestyle:{em:"🏡", zh:"生活風格", en:"Lifestyle", skills:["render","material","ux"]},
+  gaming:   {em:"🎮", zh:"電競",     en:"Gaming",    skills:["cad","render","present"]},
+  office:   {em:"🖥️", zh:"辦公",     en:"Office",    skills:["ux","material","present"]},
+  b2b:      {em:"🏢", zh:"B2B",       en:"B2B",       skills:["cad","material","ux"]},
+};
+const CAT_KEYS = Object.keys(CATS);
+/* ---------- 電腦裝備品牌（ROG快 / ASUS省力 / TUF折衷） ---------- */
+const GEAR = {
+  computer:{em:"💻", zh:"電腦",  en:"PC"},
+  monitor: {em:"🖥️", zh:"螢幕",  en:"Monitor"},
+  keyboard:{em:"⌨️", zh:"鍵盤",  en:"Keyboard"},
+  mouse:   {em:"🖱️", zh:"滑鼠",  en:"Mouse"},
+};
+const GEAR_KEYS = Object.keys(GEAR);
+const BRANDS = { ROG:{spd:1.0,pwr:0.0,col:"#ff3b3b"}, ASUS:{spd:0.0,pwr:1.0,col:"#5aa9ff"}, TUF:{spd:0.65,pwr:0.65,col:"#ffce54"} };
+function gearLv(k){ return (S.gear&&S.gear[k]&&S.gear[k].lv)||0; }
+function gearBrand(k){ return (S.gear&&S.gear[k]&&S.gear[k].brand)||"TUF"; }
+function gearCost(k){ return Math.floor(1000*Math.pow(1.55, gearLv(k))); }
+function gearSpd(){ let s=0; for(const k of GEAR_KEYS) s+=gearLv(k)*0.03*BRANDS[gearBrand(k)].spd; return s; }   // 速度加成總和
+function gearPwr(){ let s=0; for(const k of GEAR_KEYS) s+=gearLv(k)*0.03*BRANDS[gearBrand(k)].pwr; return s; }   // 省力加成總和
 
 /* ========================================================================
    floors  —  each floor is an independent map
@@ -717,6 +739,7 @@ function freshState(){
     school:null, stats:null, perk:null,
     ach:{}, sound:true, visited2:false,
     equip:{tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0},
+    gear:{}, meta:{},
     rel:{}, rivals:initRivals(), compWins:0,
     restCdUntil:0, compCdUntil:0,
     fac:{}, facCd:{}, buffUntil:0, buffAmt:1,
@@ -1399,9 +1422,10 @@ function makeQuest(npc){
   const mktM = (1+(statVal("mkt")-1)*0.05)*(S.perk==="ppt"?1.15:1);   // 市場能力 + PPT王牌
   const cashR= Math.floor(salary()/14 * dmag * (0.8+Math.random()*0.5) * fb * fameMult() * legacyMult() * mktM);
   const skR  = Math.floor(skillXpNeed(S.skills[npc.spec].lv)*(0.6 + dlog*0.06));
+  const cat = CAT_KEYS[Math.floor(Math.random()*CAT_KEYS.length)];
   return {
     npc:npc.id, npcName:npc.name, npcFace:npc.face,
-    title:`${adj}${pn}`, emoji:pe, client, diff, repeat,
+    title:`${adj}${pn}`, emoji:pe, client, diff, repeat, cat,
     skill:npc.spec, goal, prog:0,
     rewards:{exp:expR, rep:repR, cash:cashR, skill:skR},
   };
@@ -1481,7 +1505,8 @@ function offerBlock(q){
   return `<div class="offer">
      <div class="row"><span>${q.emoji} 專案</span><span>${q.title}</span></div>
      <div class="row"><span>客戶</span><span>${q.client}</span></div>
-     <div class="row"><span>難度</span><span>⚙️ ${abbr(q.diff)}${q.repeat?` <span style="color:var(--red)">(同人×${q.repeat+1})</span>`:''}</span></div>
+     ${q.cat?`<div class="row"><span>類別</span><span>${CATS[q.cat].em} ${CATS[q.cat].zh}（重 ${CATS[q.cat].skills.map(s=>SKILLS[s].em).join("")}）</span></div>`:""}
+     <div class="row"><span>難度</span><span>⚙️ ${abbr(q.diff)}${q.repeat?` <span style="color:var(--red)">(同人×${q.repeat+1})</span>`:""}</span></div>
      <div class="row"><span>主要技能</span><span>${SKILLS[q.skill].em} ${SKILLS[q.skill].name}</span></div>
      <hr style="border-color:#2a3346;border-style:dashed;margin:8px 0">
      <div class="row"><span>報酬</span><span style="color:var(--gold)">💰 $${fmt(effCash)}</span></div>
@@ -1508,9 +1533,11 @@ function renderTask(){
   if(q.selfMade){
     const st=q.steps[q.step], sk=S.skills[st.skill];
     const dots=q.steps.map((s,i)=>`<span style="opacity:${i<q.step?1:i===q.step?1:0.3};font-size:15px">${i<q.step?'✅':s.em}</span>`).join(" ");
+    const cId=q.collab&&q.collab[q.step], cN=cId?findNpc(cId):null;
     body.innerHTML=`
       <div class="qt">🚀 ${q.emoji} ${q.title} <span style="font-size:11px;color:var(--purple)">自主研發</span></div>
-      <div class="qsub">STEP ${q.step+1}/${q.steps.length} · ${st.em} ${st.name} · 難度 ⚙️${abbr(q.diff)}${q.repeat?` <span style="color:var(--red)">(第${q.repeat+1}件×2)</span>`:''}</div>
+      <div class="qsub">設計思考 ${q.step+1}/${q.steps.length} · ${st.em} ${st.name}${cN?` · 🤝${cN.name}(好感${favor(cId)})`:''}</div>
+      <div style="font-size:11px;color:var(--dim);margin:2px 0">${st.desc||''}</div>
       <div style="margin:4px 0 6px">${dots}</div>
       <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
       <div class="qmeta"><span>本階段 ${Math.floor(pct)}%</span><span>完成 💰$${fmt(q.rewards.cash*cashMult())} · 100% 分紅</span></div>
@@ -1520,7 +1547,7 @@ function renderTask(){
     const sk=S.skills[q.skill];
     body.innerHTML=`
       <div class="qt">${q.emoji} ${q.title}</div>
-      <div class="qsub">${q.client} · 難度 ⚙️${abbr(q.diff)} · 主技能 ${SKILLS[q.skill].em}${SKILLS[q.skill].name} Lv${sk.lv}</div>
+      <div class="qsub">${q.cat?CATS[q.cat].em+' ':''}${q.client} · 難度 ⚙️${abbr(q.diff)} · 主技能 ${SKILLS[q.skill].em}${SKILLS[q.skill].name} Lv${sk.lv}</div>
       <div class="bar" id="qbar"><i style="width:${pct}%"></i></div>
       <div class="qmeta"><span>進度 ${Math.floor(pct)}%</span><span>💰$${fmt(q.rewards.cash*cashMult())} · ⭐${Math.floor(q.rewards.exp*xpMult())}</span></div>
       <button class="btn" id="sprintBtn" onclick="sprint()">✏️ 全力設計！ <span style="font-size:11px">(⚡${sprintCost()})</span></button>
@@ -1535,13 +1562,14 @@ function updateSprintBtn(){
   b.style.opacity = blocked?0.6:1;
 }
 function curSkill(q){ return q.selfMade ? q.steps[q.step].skill : q.skill; }
+function questRelId(q){ return q.selfMade ? (q.collab&&q.collab[q.step]) : q.npc; }   // 目前合作對象
 function sprint(){
   if(!S.quest) return;
   const c=sprintCost();
   if(S.energy<c && S.perk!=="caffeine") return;   // 咖啡因免疫：無視精力不足
   S.energy=Math.max(0,S.energy-c);
   const sk=S.skills[curSkill(S.quest)];
-  const gain = (8*(1+sk.lv*0.12) + Math.random()*4)*sprintMult()*relSpeed(S.quest.npc)*coopMult()*buffMult()*agiMult()*(S.partner?1.12:1);
+  const gain = (8*(1+sk.lv*0.12) + Math.random()*4)*sprintMult()*relSpeed(questRelId(S.quest))*coopMult()*buffMult()*agiMult()*(S.partner?1.12:1);
   sfx("sprint");
   addProgress(gain, true);
   updateHUD();
@@ -1550,7 +1578,7 @@ setInterval(()=>{
   if(!S) return;
   if(S.quest){
     const sk=S.skills[curSkill(S.quest)];
-    addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(S.quest.npc)*coopMult()*buffMult()*agiMult()*(S.partner?1.12:1), false);
+    addProgress(0.5*(1+sk.lv*0.14)*speedMult()*relSpeed(questRelId(S.quest))*coopMult()*buffMult()*agiMult()*(S.partner?1.12:1), false);
   }
   if(S.energy<maxEnergy()){ S.energy=Math.min(maxEnergy(), S.energy+energyRegen()*dailyMult("regen")*fxMult("regen")); updateHUD(); }
 }, 240);
@@ -1602,9 +1630,10 @@ const DEPTS=[
   {key:"boss",  em:"👔", name:"BOSS",  skills:SKILL_KEYS,           boss:true},
 ];
 // 各部門依「個人能力等級」取得評分百分比（50%～200%）
-function deptPct(d){
+function deptPct(d, cat){
   const lv=d.skills.reduce((a,k)=>a+S.skills[k].lv,0)/d.skills.length;
   let pct=55 + lv*3.6;                                    // 能力越高分數越高
+  if(cat && CATS[cat] && CATS[cat].skills.some(s=>d.skills.includes(s))) pct+=8;   // 產品類別契合
   pct += (statVal("aes")-1)*2;                            // 美感全面加分
   if(d.fame) pct += (statVal("mkt")-1)*3 + Math.log10((S.followers||0)+10)*4;
   if(d.boss) pct += (S.rep||0)/2000 + coopLevel()*0.2 + (statVal("design")-1)*2;
@@ -1628,12 +1657,14 @@ function completeQuest(){
   // 各部門依能力取得評分% → 平均(最低項×3權重) − 難度分 = 專案最終評分
   const pts = ratingPoints();
   const avgLv = pts/SKILL_KEYS.length;
-  const reviews = DEPTS.map(d=>{ const pct=deptPct(d); return {d, pct, t:gradeFromPct(pct)}; });
+  const reviews = DEPTS.map(d=>{ const pct=deptPct(d, q.cat); return {d, pct, t:gradeFromPct(pct)}; });
   const vals = reviews.map(r=>r.pct);
   const mn = Math.min(...vals);
   const wavg = (vals.reduce((a,b)=>a+b,0) + 2*mn) / (vals.length + 2);   // 最低項 ×3 權重
   const diffScore = Math.max(0, (Math.log2((q.diff||8)+1) - avgLv*0.55) * 6);  // 難度分
-  const finalScore = wavg - diffScore;
+  let collabBonus=0;
+  if(self && q.collab){ const fv=q.collab.filter(Boolean).map(favor); if(fv.length) collabBonus=(fv.reduce((a,b)=>a+b,0)/fv.length)*0.12; }  // 協作好感加成
+  const finalScore = wavg - diffScore + collabBonus;
   const overallT = gradeFromPct(finalScore);
   const P=PRES[overallT];
   S.bestPres=Math.max(S.bestPres||0, overallT);
@@ -1747,6 +1778,27 @@ function gainSkill(k,n){
 /* ========================================================================
    achievements
    ===================================================================== */
+/* 無限成長成就：里程碑軌道，門檻不斷倍增 */
+const META=[
+  {key:"tasks",     em:"🏭", name:"接案裡程碑", get:s=>s.tasksDone, base:25,   mul:2},
+  {key:"level",     em:"⭐", name:"等級裡程碑", get:s=>s.level,     base:20,   mul:1.6},
+  {key:"cash",      em:"💰", name:"財富裡程碑", get:s=>s.cash,      base:1e6,  mul:6},
+  {key:"followers", em:"📱", name:"粉絲裡程碑", get:s=>s.followers||0, base:5e4, mul:4},
+  {key:"awards",    em:"🥇", name:"獲獎裡程碑", get:s=>s.awardsWon||0, base:3,  mul:2},
+];
+function metaThreshold(m,tier){ return Math.floor(m.base*Math.pow(m.mul,tier)); }
+function metaTotal(){ if(!S.meta) return 0; return Object.values(S.meta).reduce((a,b)=>a+b,0); }
+function checkMeta(){
+  if(!S.meta) S.meta={};
+  for(const m of META){
+    let tier=S.meta[m.key]||0, guard=0;
+    while(m.get(S) >= metaThreshold(m,tier) && guard++<50){
+      tier++; S.meta[m.key]=tier;
+      log(`🏅 里程碑「${m.em} ${m.name} ${tier}」達成！（門檻 ${abbr(metaThreshold(m,tier-1))}）`,"y");
+      toast(`🏅 ${m.em} ${m.name} Lv${tier}`); sfx("achieve");
+    }
+  }
+}
 function checkAch(){
   for(const a of ACH){
     if(!S.ach[a.id] && a.chk(S)){
@@ -1755,11 +1807,12 @@ function checkAch(){
       toast(`🏅 成就解鎖 · ${a.em} ${a.name}`); sfx("achieve");
     }
   }
+  checkMeta();
   updateAchChip();
 }
 function updateAchChip(){
   const got=Object.keys(S.ach).filter(k=>S.ach[k]).length;
-  $("achTxt").textContent=got+"/"+ACH.length;
+  $("achTxt").textContent=got+"/"+ACH.length+"+"+metaTotal();
 }
 function openAch(){
   sfx("click");
@@ -1771,7 +1824,15 @@ function openAch(){
       <div><div class="an">${a.name}</div><div class="ad">${a.desc}</div></div>
       <div class="tick">${un?'✅':''}</div></div>`;
   }).join("");
-  $("modal").innerHTML=`<h2>🏅 成就 <span style="font-size:14px;color:var(--dim)">(${got}/${ACH.length})</span></h2>
+  const metaRows=META.map(m=>{ const tier=(S.meta&&S.meta[m.key])||0;
+    return `<div class="achrow"><div class="ae">${m.em}</div>
+      <div style="flex:1"><div class="an">${m.name} <span style="color:var(--gold)">Lv${tier}</span></div>
+        <div class="ad">目前 ${abbr(m.get(S))} / 下個門檻 ${abbr(metaThreshold(m,tier))}</div></div>
+      <div class="tick">♾️</div></div>`; }).join("");
+  $("modal").innerHTML=`<h2>🏅 成就 <span style="font-size:14px;color:var(--dim)">(${got}/${ACH.length} · 里程碑 +${metaTotal()})</span></h2>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:6px">♾️ 無限里程碑（門檻不斷倍增）</div>
+    <div class="achlist">${metaRows}</div>
+    <div style="font-size:12px;color:var(--dim);margin:12px 0 6px">🏆 成就</div>
     <div class="achlist">${rows}</div>
     <div class="modalBtns" style="margin-top:14px"><button class="btn" onclick="closeModal()">關閉</button></div>`;
   $("overlay").style.display="flex";
@@ -1786,8 +1847,8 @@ function speedMult(){ return 1 + eqLv('station')*0.10; }
 function sprintMult(){ return 1 + eqLv('tablet')*0.14; }
 function xpMult(){ return 1 + eqLv('software')*0.12; }
 function cashMult(){ return 1 + eqLv('notebook')*0.14; }
-function maxEnergy(){ return 100 + eqLv('chair')*20 + (statVal('stam')-1)*15; }
-function energyRegen(){ return 0.6 + eqLv('coffee')*0.30 + (statVal('stam')-1)*0.08 + (S.perk==='caffeine'?0.6:0); }
+function maxEnergy(){ return 100 + eqLv('chair')*20 + (statVal('stam')-1)*15 + Math.round(gearPwr()*40); }
+function energyRegen(){ return 0.6 + eqLv('coffee')*0.30 + (statVal('stam')-1)*0.08 + (S.perk==='caffeine'?0.6:0) + gearPwr()*0.5; }
 function favor(id){ return Math.min(100, (S.rel&&S.rel[id])||0); }
 function relSpeed(id){ return 1 + favor(id)/100*0.6; }
 function coopLevel(){ const v=Object.values(S.rel||{}); if(!v.length) return 0; return v.reduce((a,b)=>a+Math.min(100,b),0)/v.length; }
@@ -1855,8 +1916,21 @@ function openShop(){
       <button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${afford?'':'opacity:.5'}" onclick="buyItem('${k}')">$${fmt(it.price)}</button>
     </div>`;
   }).join("");
+  const gearRows=GEAR_KEYS.map(k=>{
+    const g=GEAR[k], cost=gearCost(k), afford=S.cash>=cost, br=gearBrand(k);
+    const brBtns=Object.keys(BRANDS).map(bn=>`<button class="btn sec" style="width:auto;margin:0;padding:3px 6px;font-size:11px;${br===bn?('border-color:'+BRANDS[bn].col+';color:'+BRANDS[bn].col):''}" onclick="setGearBrand('${k}','${bn}')">${bn}</button>`).join(" ");
+    return `<div class="achrow" style="flex-wrap:wrap">
+      <div class="ae">${g.em}</div>
+      <div style="flex:1;min-width:120px"><div class="an">${g.zh} <span style="color:var(--blue)">Lv${gearLv(k)}</span> <span style="color:${BRANDS[br].col};font-size:11px">${br}</span></div>
+        <div class="ad">ROG 快 · ASUS 省力 · TUF 折衷</div>
+        <div style="margin-top:4px;display:flex;gap:4px">${brBtns}</div></div>
+      <button class="btn sec" style="width:auto;margin:0;padding:7px 10px;${afford?'':'opacity:.5'}" onclick="buyGear('${k}')">升級 $${fmt(cost)}</button>
+    </div>`;
+  }).join("");
   $("modal").innerHTML=`<h2>🛒 設計工具行 <span style="font-size:13px;color:var(--gold)">💰 $${fmt(S.cash)}</span></h2>
-    <div style="font-size:12px;color:var(--dim);margin:2px 0 8px">🧰 裝備（可無限升級，加成永久）</div>
+    <div style="font-size:12px;color:var(--dim);margin:2px 0 8px">💻 電腦裝備（ROG/ASUS/TUF · 可無限升級）速度+${(gearSpd()*100).toFixed(0)}% 省力+${(gearPwr()*100).toFixed(0)}%</div>
+    <div class="achlist">${gearRows}</div>
+    <div style="font-size:12px;color:var(--dim);margin:14px 0 8px">🧰 設計裝備</div>
     <div class="achlist">${eqRows}</div>
     <div style="font-size:12px;color:var(--dim);margin:14px 0 8px">📚 技能進修</div>
     <div class="achlist">${skRows}</div>
@@ -1864,6 +1938,17 @@ function openShop(){
     <div class="achlist">${itRows}</div>
     <div class="modalBtns" style="margin-top:14px"><button class="btn" onclick="closeModal()">關閉</button></div>`;
   $("overlay").style.display="flex";
+}
+function buyGear(k){
+  const cost=gearCost(k);
+  if(S.cash<cost){ toast("現金不足"); sfx("bad"); return; }
+  S.cash-=cost; if(!S.gear) S.gear={}; if(!S.gear[k]) S.gear[k]={lv:0,brand:"TUF"}; S.gear[k].lv++;
+  sfx("accept"); log(`💻 升級 ${GEAR[k].zh}（${gearBrand(k)}）→ Lv${gearLv(k)}`,"g");
+  updateHUD(); checkAch(); save(); openShop();
+}
+function setGearBrand(k,bn){
+  if(!S.gear) S.gear={}; if(!S.gear[k]) S.gear[k]={lv:0,brand:"TUF"}; S.gear[k].brand=bn;
+  sfx("click"); updateHUD(); save(); openShop();
 }
 function buyEquip(k){
   const cost=eqCost(k);
@@ -2118,7 +2203,7 @@ function newDay(){
   log(`🌅 第 ${S.day} 天！領到日薪 +$${fmt(wage)}｜今日狀態：${S.daily.em}${S.daily.name}（${S.daily.desc}）`,"y");
   toast(`🌅 Day ${S.day} · ${S.daily.em}${S.daily.name}`); sfx("level");
   checkAch(); save();
-  if(S.day % YEAR_DAYS === 0){ setTimeout(designerOfYear, 1200); }
+  if(S.day % YEAR_DAYS === 0){ setTimeout(designerOfYear, 1200); setTimeout(autoAward, 2600); }
   else if(Math.random()<0.5){ setTimeout(triggerRandomEvent, 900); }
 }
 function updateDayChip(){
@@ -2210,11 +2295,13 @@ function startSelfDev(){
   const cnt=S.selfDevCount||0;                                  // 已完成自主研發次數
   const diff=questDiff(curCity,curFloor,cnt)*1.5;               // 每做一次難度 ×2（略高於一般案）
   const goalPer=Math.floor(50*(1+Math.log2(diff+1)*0.4)*(1+(S.level-1)*0.06));
+  // 每階段指派同層一位同事協作（好感有助評級）
+  const pool=[...FLOOR.npcs]; const collab=DEV_STEPS.map((_,i)=> (pool[i%pool.length]||{}).id || null );
   S.quest={ selfMade:true, step:0, steps:DEV_STEPS, title:adj+pn, emoji:pe, client:"自主研發",
-    diff, repeat:cnt, goal:goalPer, prog:0, npc:null, npcName:"自主研發",
+    diff, repeat:cnt, goal:goalPer, prog:0, npc:null, npcName:"自主研發", cat:CAT_KEYS[Math.floor(Math.random()*CAT_KEYS.length)], collab,
     rewards:{ cash:Math.floor(salary()/7*Math.sqrt(diff)), exp:Math.floor(expNeed(S.level)*1.3), rep:Math.floor(28+S.level*2), skill:0 } };
   closeModal(); renderTask(); sfx("accept");
-  log(`🚀 啟動自主研發「${adj}${pn}」（第 ${cnt+1} 件，難度 ⚙️${abbr(diff)}）！需獨力完成 ${DEV_STEPS.length} 個階段，成品 100% 歸你。`,"pu"); save();
+  log(`🚀 啟動自主研發「${adj}${pn}」（第 ${cnt+1} 件）！以設計思考 5 階段獨力完成，每階需與同事協作。`,"pu"); save();
 }
 
 /* ========================================================================
@@ -2593,6 +2680,26 @@ function enterAward(id){
   }
   updateHUD(); checkAch(); save(); openAwards();
 }
+/* 每年一次：自動挑最佳作品參加國際設計比賽 */
+function autoAward(){
+  if(!(S.works||[]).length) return;
+  const rot=["reddot","if","gmark"]; const yr=Math.floor((S.day||1)/YEAR_DAYS);
+  const a=AWARDS.find(x=>x.id===rot[yr%rot.length])||AWARDS[0];
+  const w=[...S.works].sort((x,y)=>gradeRank[y.grade]-gradeRank[x.grade])[0];
+  if(gradeRank[w.grade] < gradeRank[a.minGrade]){ log(`🎪 年度 ${a.name} 徵件：最佳作品「${w.name}」未達 ${a.minGrade} 級門檻，明年再拼。`,"b"); return; }
+  const chance=Math.min(0.92, 0.2 + gradeRank[w.grade]*0.16 + skillsAvg()*0.012 + (S.rep||0)*0.00003);
+  if(Math.random()<chance){
+    if(!w.awards.includes(a.badge)) w.awards.push(a.badge);
+    S.awardsWon=(S.awardsWon||0)+1;
+    const prize=Math.floor(salary()*a.prestige*1.6), rep=Math.floor(60*a.prestige+S.level*4);
+    S.cash+=prize; S.rep+=rep; gainFollowers(Math.floor(2000+(S.rep||0)*4),null);
+    log(`🏆 年度 ${a.badge} ${a.name}：自動送件 ${w.emoji}「${w.name}」榮獲大獎！+💰$${fmt(prize)}、聲望 +${rep}`,"y");
+    toast(`🏆 ${a.name} 得獎!`); sfx("rank");
+  } else {
+    log(`🎪 年度 ${a.badge} ${a.name}：自動送件 ${w.emoji}「${w.name}」，可惜未入選。`,"b"); sfx("complete");
+  }
+  updateHUD(); checkAch(); save();
+}
 function designerOfYear(){
   const myScore=S.rep + (S.awardsWon||0)*60 + (S.sworks||0)*25 + (S.works||[]).length*8 + S.level*10;
   const field=S.rivals.map(r=>({face:r.face,name:r.name,score:Math.floor(r.rep*1.15+Math.random()*220)}));
@@ -2724,6 +2831,7 @@ function load(){
     if(typeof S.selfDevCount!=="number") S.selfDevCount=0;
     if(!S.school){ S.school="self"; S.stats={stam:3,spd:3,design:3,aes:3,eng:3,mkt:3}; S.perk=null; }  // 舊存檔：自學者(均衡D)
     if(!S.equip) S.equip={tablet:0,station:0,software:0,chair:0,coffee:0,notebook:0};
+    if(!S.gear) S.gear={}; if(!S.meta) S.meta={};
     if(!S.rel) S.rel={};
     if(!S.rivals || !S.rivals.length) S.rivals=initRivals();
     if(typeof S.compWins!=="number") S.compWins=0;
