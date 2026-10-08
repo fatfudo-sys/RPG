@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D 攝影棚燈光模擬器</title>
+<style>
+  :root{
+    --bg:#15171b; --panel:#1d2026; --panel2:#262a32; --line:#343944;
+    --text:#e6e8ec; --muted:#9097a3; --accent:#ffb347; --danger:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font:13px/1.45 system-ui,-apple-system,"Noto Sans TC","PingFang TC",sans-serif}
+  #app{display:flex;height:100%}
+  #panel{width:330px;flex:none;background:var(--panel);border-right:1px solid var(--line);
+    overflow-y:auto;padding:12px 14px 40px}
+  #view{position:relative;flex:1;min-width:0}
+  canvas{display:block}
+  h1{font-size:16px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:10px}
+  h2{font-size:12px;letter-spacing:.08em;color:var(--accent);margin:18px 0 8px;
+    text-transform:uppercase;border-top:1px solid var(--line);padding-top:12px}
+  .row{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .row label{width:74px;flex:none;color:var(--muted)}
+  .row input[type=range]{flex:1;min-width:0;accent-color:var(--accent)}
+  .row output{width:52px;text-align:right;font-variant-numeric:tabular-nums}
+  select,input[type=text],button{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:6px;padding:6px 8px;font:inherit}
+  select,input[type=text]{flex:1;min-width:0}
+  button{cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.danger:hover{border-color:var(--danger);color:var(--danger)}
+  .btns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+  #lightList{display:flex;flex-direction:column;gap:4px}
+  .li{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);
+    border-radius:6px;background:var(--panel2);cursor:pointer}
+  .li.sel{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+  .li .sw{width:12px;height:12px;border-radius:50%;flex:none;border:1px solid #0006}
+  .li .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .li .ev{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
+  .li.off{opacity:.45}
+  .hint{color:var(--muted);font-size:12px;margin-top:6px}
+  .chk{display:flex;align-items:center;gap:6px;margin:6px 0;color:var(--text)}
+  #hud{position:absolute;left:12px;top:12px;display:flex;gap:6px}
+  #hud button{background:#1d2026cc;backdrop-filter:blur(4px)}
+  #hud button.on{border-color:var(--accent);color:var(--accent)}
+  #pipLabel{position:absolute;right:16px;bottom:calc(16px + var(--ph,0px) + 4px);font-size:11px;
+    color:#fff;background:#000a;padding:1px 6px;border-radius:4px;pointer-events:none}
+  #frameInfo{position:absolute;right:16px;top:12px;font-size:12px;color:#fff;background:#000a;
+    padding:3px 8px;border-radius:4px;pointer-events:none}
+  @media (max-width:760px){
+    #app{flex-direction:column-reverse}
+    #panel{width:100%;height:45%;border-right:0;border-top:1px solid var(--line)}
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <h1>3D 攝影棚燈光模擬器</h1>
+    <div class="sub">拖曳場景中的燈具、點選選取；右鍵拖曳平移、滾輪縮放。</div>
+
+    <h2>布光預設</h2>
+    <div class="row"><select id="preset"></select></div>
+
+    <h2>燈具</h2>
+    <div class="btns">
+      <button data-add="softbox">＋ 柔光箱</button>
+      <button data-add="spot">＋ 聚光燈</button>
+      <button data-add="point">＋ 點光源</button>
+    </div>
+    <div id="lightList"></div>
+    <div class="hint">亮度以「檔 (stop)」表示，右側數字為與第一盞燈的光比差。</div>
+
+    <div id="sel">
+      <h2>選取的燈</h2>
+      <div class="row"><label>名稱</label><input type="text" id="p_name"></div>
+      <div class="row"><label>類型</label>
+        <select id="p_type">
+          <option value="softbox">柔光箱</option>
+          <option value="spot">聚光燈</option>
+          <option value="point">點光源</option>
+        </select>
+      </div>
+      <div class="row"><label>方位角</label><input type="range" id="p_az" min="-180" max="180" step="1"><output></output></div>
+      <div class="row"><label>仰角</label><input type="range" id="p_el" min="-20" max="85" step="1"><output></output></div>
+      <div class="row"><label>距離</label><input type="range" id="p_dist" min="0.8" max="6" step="0.05"><output></output></div>
+      <div class="row"><label>亮度</label><input type="range" id="p_stops" min="-5" max="3" step="0.1"><output></output></div>
+      <div class="row"><label>色溫</label><input type="range" id="p_kelvin" min="2500" max="10000" step="100"><output></output></div>
+      <div class="row" data-for="softbox"><label>寬度</label><input type="range" id="p_w" min="0.2" max="3" step="0.05"><output></output></div>
+      <div class="row" data-for="softbox"><label>高度</label><input type="range" id="p_h" min="0.2" max="3" step="0.05"><output></output></div>
+      <div class="row" data-for="spot"><label>光束角</label><input type="range" id="p_beam" min="8" max="75" step="1"><output></output></div>
+      <div class="row" data-for="spot"><label>邊緣柔化</label><input type="range" id="p_pen" min="0" max="1" step="0.05"><output></output></div>
+      <div class="row"><label>陰影</label><input type="range" id="p_shadow" min="0" max="1" step="0.05"><output></output></div>
+      <div class="btns">
+        <button id="p_toggle">開／關</button>
+        <button id="p_dup">複製</button>
+        <button id="p_del" class="danger">刪除</button>
+      </div>
+    </div>
+
+    <h2>場景</h2>
+    <div class="row"><label>曝光</label><input type="range" id="s_ev" min="-3" max="3" step="0.1" value="0"><output></output></div>
+    <div class="row"><label>環境補光</label><input type="range" id="s_amb" min="0" max="1" step="0.01" value="0.04"><output></output></div>
+    <div class="row"><label>背景紙</label><input type="color" id="s_bg" value="#d9d9d9"></div>
+    <div class="row"><label>主體</label>
+      <select id="s_subj">
+        <option value="matte">霧面灰（看光影）</option>
+        <option value="skin">膚色</option>
+        <option value="glossy">亮面（看高光）</option>
+      </select>
+    </div>
+    <div class="chk"><input type="checkbox" id="s_grid" checked><label for="s_grid">顯示地面格線</label></div>
+
+    <h2>相機</h2>
+    <div class="row"><label>焦段</label><input type="range" id="c_focal" min="16" max="200" step="1" value="50"><output></output></div>
+    <div class="row"><label>相機高度</label><input type="range" id="c_h" min="0.3" max="2.5" step="0.05" value="1.5"><output></output></div>
+    <div class="row"><label>相機距離</label><input type="range" id="c_d" min="1.5" max="9" step="0.1" value="5"><output></output></div>
+    <div class="chk"><input type="checkbox" id="c_hide" checked><label for="c_hide">相機畫面隱藏燈具</label></div>
+  </aside>
+
+  <main id="view">
+    <div id="hud">
+      <button id="v_orbit" class="on">棚內視角</button>
+      <button id="v_cam">相機畫面</button>
+      <button id="v_top">俯視</button>
+      <button id="v_shot">儲存截圖</button>
+    </div>
+    <div id="frameInfo"></div>
+    <div id="pipLabel"></div>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+
+const $ = (s, r = document) => r.querySelector(s);
+const TARGET = new THREE.Vector3(0, 1.55, 0);   // 燈具瞄準點（臉部高度）
+const rad = d => d * Math.PI / 180;
+const deg = r => r * 180 / Math.PI;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+/* ---------------------------------------------------------------- renderer */
+const view = $('#view');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+view.prepend(renderer.domElement);
+RectAreaLightUniformsLib.init();
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0c0d10);
+
+const orbitCam = new THREE.PerspectiveCamera(45, 1, 0.05, 80);
+orbitCam.position.set(5.5, 3.2, 7.5);
+const shotCam = new THREE.PerspectiveCamera(30, 3 / 2, 0.05, 80);
+
+const orbit = new OrbitControls(orbitCam, renderer.domElement);
+orbit.target.set(0, 1.3, 0);
+orbit.enableDamping = true;
+orbit.maxPolarAngle = Math.PI * 0.495;
+orbit.update();
+
+/* ------------------------------------------------------------------ studio */
+const hemi = new THREE.HemisphereLight(0xffffff, 0x888888, 0.04);
+scene.add(hemi);
+
+// 弧形無縫背景紙（floor → 圓弧 → wall）
+const bgMat = new THREE.MeshStandardMaterial({ color: 0xd9d9d9, roughness: 0.95, side: THREE.DoubleSide });
+function makeCyc() {
+  const prof = [];                           // [y, z]
+  prof.push([0, 7], [0, -2.4]);
+  const R = 1.6, N = 20;
+  for (let i = 1; i <= N; i++) {
+    const a = (i / N) * Math.PI / 2;
+    prof.push([R - R * Math.cos(a), -2.4 - R * Math.sin(a)]);
+  }
+  prof.push([7, -4.0]);
+  const X = 9, pos = [], idx = [];
+  prof.forEach(([y, z]) => pos.push(-X, y, z, X, y, z));
+  for (let i = 0; i < prof.length - 1; i++) {
+    const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+    idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, bgMat);
+  m.receiveShadow = true;
+  return m;
+}
+scene.add(makeCyc());
+
+const grid = new THREE.GridHelper(18, 36, 0x000000, 0x000000);
+grid.material.transparent = true; grid.material.opacity = 0.12;
+grid.position.y = 0.003;
+scene.add(grid);
+
+// 地板兩側延伸（避免看到邊緣）
+const outer = new THREE.Mesh(new THREE.PlaneGeometry(80, 80),
+  new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 1 }));
+outer.rotation.x = -Math.PI / 2; outer.position.y = -0.01; outer.receiveShadow = true;
+scene.add(outer);
+
+/* ----------------------------------------------------------------- subject */
+const subjMat = new THREE.MeshStandardMaterial({ color: 0xcfcfcf, roughness: 0.65 });
+const subject = new THREE.Group();
+function part(geo, x, y, z, sx = 1, sy = 1, sz = 1) {
+  const m = new THREE.Mesh(geo, subjMat);
+  m.position.set(x, y, z); m.scale.set(sx, sy, sz);
+  m.castShadow = m.receiveShadow = true;
+  subject.add(m); return m;
+}
+const capsule = (r, l) => new THREE.CapsuleGeometry(r, l, 8, 20);
+part(capsule(0.075, 0.7), -0.1, 0.48, 0);                 // 腿
+part(capsule(0.075, 0.7), 0.1, 0.48, 0);
+part(capsule(0.18, 0.38), 0, 1.16, 0, 1, 1, 0.65);         // 軀幹
+part(new THREE.SphereGeometry(0.1, 24, 16), -0.24, 1.46, 0); // 肩
+part(new THREE.SphereGeometry(0.1, 24, 16), 0.24, 1.46, 0);
+part(capsule(0.05, 0.5), -0.3, 1.18, 0);                   // 手臂
+part(capsule(0.05, 0.5), 0.3, 1.18, 0);
+part(new THREE.CylinderGeometry(0.05, 0.06, 0.12, 16), 0, 1.53, 0); // 頸
+part(new THREE.SphereGeometry(0.11, 40, 28), 0, 1.66, 0, 0.9, 1.18, 1.0);   // 頭
+part(new THREE.ConeGeometry(0.022, 0.06, 16), 0, 1.65, 0.115, 1, 1, 1).rotation.x = Math.PI / 2; // 鼻
+part(new THREE.SphereGeometry(0.03, 12, 8), -0.108, 1.66, 0.0, 0.5, 1.5, 1);     // 耳
+part(new THREE.SphereGeometry(0.03, 12, 8), 0.108, 1.66, 0.0, 0.5, 1.5, 1);
+scene.add(subject);
+
+// 小道具：地上的球與方塊，用來觀察光線落差
+const propMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.4 });
+const ball = new THREE.Mesh(new THREE.SphereGeometry(0.22, 40, 28), propMat);
+ball.position.set(-0.9, 0.22, 0.5); ball.castShadow = ball.receiveShadow = true;
+const cube = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), propMat);
+cube.position.set(0.95, 0.2, 0.2); cube.rotation.y = 0.5; cube.castShadow = cube.receiveShadow = true;
+scene.add(ball, cube);
+
+const SUBJECTS = {
+  matte:  { color: 0xcfcfcf, roughness: 0.7,  metalness: 0 },
+  skin:   { color: 0xd9a58a, roughness: 0.55, metalness: 0 },
+  glossy: { color: 0xcfcfcf, roughness: 0.18, metalness: 0.1 },
+};
+
+/* ------------------------------------------------------------ camera gizmo */
+const camGizmo = new THREE.Group();
+{
+  const mat = new THREE.MeshStandardMaterial({ color: 0x2b2e35, roughness: 0.5 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.15, 0.12), mat);
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.12, 20), mat);
+  lens.rotation.x = Math.PI / 2; lens.position.z = -0.1;
+  const tri = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 1, 6), mat);
+  tri.position.y = -0.58;
+  camGizmo.add(body, lens, tri);
+}
+scene.add(camGizmo);
+
+/* ------------------------------------------------------------------ lights */
+function kelvinToColor(k) {
+  const t = k / 100; let r, g, b;
+  if (t <= 66) {
+    r = 255; g = 99.4708025861 * Math.log(t) - 161.1195681661;
+    b = t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307;
+  } else {
+    r = 329.698727446 * Math.pow(t - 60, -0.1332047592);
+    g = 288.1221695283 * Math.pow(t - 60, -0.0755148492); b = 255;
+  }
+  const c = v => clamp(v, 0, 255) / 255;
+  return new THREE.Color().setRGB(c(r), c(g), c(b), THREE.SRGBColorSpace);
+}
+
+// stops = 0 時的基準強度（目測校準，使三種燈在 ~2.5m 距離大致同亮）
+const BASE = { softbox: 7, spot: 55, point: 22 };
+const TYPE_NAME = { softbox: '柔光箱', spot: '聚光燈', point: '點光源' };
+
+const lights = [];          // 所有燈的資料
+let selected = null;
+let nextId = 1;
+
+const bodyMat = new THREE.MeshStandardMaterial({ color: 0x23262c, roughness: 0.6, metalness: 0.3 });
+
+function buildLight(L) {
+  // 清掉舊的子物件
+  while (L.group.children.length) L.group.remove(L.group.children[0]);
+  L.group.userData.lightId = L.id;
+  const p = L.params;
+
+  const body = new THREE.Group();     // 只含可見外殼，可整組隱藏
+  body.userData.lightId = L.id;
+  L.body = body;
+  L.group.add(body);
+
+  L.lights = [];
+  L.glow = null;
+
+  if (L.type === 'softbox') {
+    L.rect = new THREE.RectAreaLight(0xffffff, 1, p.w, p.h);
+    L.group.add(L.rect);
+    L.sh = new THREE.SpotLight(0xffffff, 1, 0, rad(40), 1, 2);   // 負責陰影
+    L.sh.castShadow = true; L.sh.shadow.mapSize.set(1024, 1024);
+    L.sh.shadow.camera.near = 0.3; L.sh.shadow.camera.far = 14; L.sh.shadow.bias = -0.0004;
+    L.sh.shadow.radius = 6;
+    L.sh.target.position.set(0, 0, 10);
+    L.group.add(L.sh, L.sh.target);
+    L.lights.push(L.rect, L.sh);
+
+    const house = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), bodyMat);
+    house.position.z = -0.17; house.userData.role = 'house';
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), glowMat);
+    panel.position.z = 0.01;
+    body.add(house, panel);
+    L.glow = glowMat; L.panel = panel; L.house = house;
+  } else if (L.type === 'spot') {
+    L.sp = new THREE.SpotLight(0xffffff, 1, 0, rad(p.beam), p.pen, 2);
+    L.sp.castShadow = true; L.sp.shadow.mapSize.set(1024, 1024);
+    L.sp.shadow.camera.near = 0.3; L.sp.shadow.camera.far = 14; L.sp.shadow.bias = -0.0004;
+    L.sp.shadow.radius = 4;
+    L.sp.target.position.set(0, 0, 10);
+    L.group.add(L.sp, L.sp.target);
+    L.lights.push(L.sp);
+
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.34, 24), bodyMat);
+    can.rotation.x = Math.PI / 2; can.position.z = -0.17;
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.15, 24), glowMat);
+    lens.position.z = 0.003;
+    body.add(can, lens);
+    L.glow = glowMat;
+  } else {
+    L.pt = new THREE.PointLight(0xffffff, 1, 0, 2);
+    L.pt.castShadow = true; L.pt.shadow.mapSize.set(1024, 1024);
+    L.pt.shadow.camera.near = 0.2; L.pt.shadow.camera.far = 14; L.pt.shadow.bias = -0.0005;
+    L.group.add(L.pt);
+    L.lights.push(L.pt);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+    body.add(new THREE.Mesh(new THREE.SphereGeometry(0.08, 20, 14), glowMat));
+    L.glow = glowMat;
+  }
+  body.traverse(o => { if (o.isMesh) o.userData.lightId = L.id; });
+  applyParams(L);
+}
+
+function applyParams(L) {
+  const p = L.params, col = kelvinToColor(p.kelvin);
+  const on = p.on;
+  const k = Math.pow(2, p.stops);
+  const shadowAmt = p.shadow;
+
+  if (L.type === 'softbox') {
+    L.rect.color.copy(col); L.rect.width = p.w; L.rect.height = p.h;
+    L.rect.intensity = on ? BASE.softbox * k * (1 - 0.35 * shadowAmt) : 0;
+    // 柔光箱面積較大時，單一陰影光源能量佔比 (shadowAmt) 以斜率補償
+    L.sh.color.copy(col);
+    const dist = L.group.position.distanceTo(TARGET) || 2.5;
+    L.sh.intensity = on ? BASE.spot * 0.35 * k * (p.w * p.h) * shadowAmt * (dist * dist) / 6.25 : 0;
+    L.sh.angle = clamp(Math.atan(1.3 / dist) + 0.1, 0.2, 1.2);
+    L.sh.visible = shadowAmt > 0;
+    L.sh.castShadow = shadowAmt > 0;
+    L.sh.shadow.radius = 4 + 8 * Math.min(1, (p.w + p.h) / 3);
+    L.house.scale.set(p.w + 0.04, p.h + 0.04, 0.34);
+    L.panel.scale.set(p.w, p.h, 1);
+  } else if (L.type === 'spot') {
+    L.sp.color.copy(col);
+    L.sp.intensity = on ? BASE.spot * k : 0;
+    L.sp.angle = rad(p.beam); L.sp.penumbra = p.pen;
+    L.sp.castShadow = shadowAmt > 0;
+    L.sp.shadow.intensity = shadowAmt;
+  } else {
+    L.pt.color.copy(col);
+    L.pt.intensity = on ? BASE.point * k : 0;
+    L.pt.castShadow = shadowAmt > 0;
+  }
+  if (L.glow) {
+    const c = col.clone();
+    if (!on) c.multiplyScalar(0.12);
+    L.glow.color.copy(c);
+  }
+  L.lights.forEach(l => { l.visible = on && (l.isSpotLight && L.type === 'softbox' ? shadowAmt > 0 : true); });
+  L.group.visible = true;
+}
+
+function placeLight(L) {
+  const p = L.params, az = rad(p.az), el = rad(p.el);
+  L.group.position.set(
+    TARGET.x + p.dist * Math.sin(az) * Math.cos(el),
+    TARGET.y + p.dist * Math.sin(el),
+    TARGET.z + p.dist * Math.cos(az) * Math.cos(el));
+  L.group.position.y = Math.max(0.15, L.group.position.y);
+  L.group.lookAt(TARGET);
+  L.group.updateMatrixWorld(true);
+}
+
+function readPosition(L) {          // 拖曳後由位置回推參數
+  const v = L.group.position.clone().sub(TARGET);
+  const p = L.params;
+  p.dist = clamp(v.length(), 0.8, 6);
+  p.el = clamp(deg(Math.asin(v.y / (v.length() || 1))), -20, 85);
+  p.az = deg(Math.atan2(v.x, v.z));
+}
+
+function addLight(type, opts = {}) {
+  const L = {
+    id: nextId++, type,
+    name: opts.name || `${TYPE_NAME[type]} ${nextId - 1}`,
+    group: new THREE.Group(),
+    params: Object.assign({
+      az: -45, el: 30, dist: 2.5, stops: 0, kelvin: 5600, on: true,
+      w: 1.0, h: 1.0, beam: 35, pen: 0.5, shadow: 0.8,
+    }, opts.params || {}),
+  };
+  scene.add(L.group);
+  lights.push(L);
+  buildLight(L);
+  placeLight(L);
+  applyParams(L);
+  select(L);
+  return L;
+}
+
+function removeLight(L) {
+  const i = lights.indexOf(L);
+  if (i < 0) return;
+  if (selected === L) { transform.detach(); selected = null; }
+  scene.remove(L.group);
+  lights.splice(i, 1);
+  select(lights[Math.min(i, lights.length - 1)] || null);
+}
+
+function clearLights() {
+  [...lights].forEach(L => { scene.remove(L.group); });
+  lights.length = 0; selected = null; transform.detach();
+}
+
+/* ------------------------------------------------------- transform gizmo */
+const transform = new TransformControls(orbitCam, renderer.domElement);
+transform.setMode('translate');
+transform.setSize(0.7);
+const tHelper = transform.getHelper ? transform.getHelper() : transform;
+scene.add(tHelper);
+transform.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; });
+transform.addEventListener('objectChange', () => {
+  if (!selected) return;
+  const g = selected.group;
+  g.position.y = Math.max(0.15, g.position.y);
+  readPosition(selected);
+  g.lookAt(TARGET);
+  applyParams(selected);
+  syncUI();
+});
+
+/* -------------------------------------------------------------------- UI */
+const ui = {
+  name: $('#p_name'), type: $('#p_type'),
+  az: $('#p_az'), el: $('#p_el'), dist: $('#p_dist'), stops: $('#p_stops'),
+  kelvin: $('#p_kelvin'), w: $('#p_w'), h: $('#p_h'), beam: $('#p_beam'),
+  pen: $('#p_pen'), shadow: $('#p_shadow'),
+};
+const FMT = {
+  az: v => `${Math.round(v)}°`, el: v => `${Math.round(v)}°`,
+  dist: v => `${(+v).toFixed(2)} m`, stops: v => `${v > 0 ? '+' : ''}${(+v).toFixed(1)} EV`,
+  kelvin: v => `${Math.round(v)} K`, w: v => `${(+v).toFixed(2)} m`, h: v => `${(+v).toFixed(2)} m`,
+  beam: v => `${Math.round(v)}°`, pen: v => (+v).toFixed(2), shadow: v => `${Math.round(v * 100)}%`,
+};
+
+function syncUI() {
+  const L = selected;
+  $('#sel').style.display = L ? '' : 'none';
+  renderList();
+  if (!L) return;
+  const p = L.params;
+  ui.name.value = L.name; ui.type.value = L.type;
+  for (const key of Object.keys(FMT)) {
+    ui[key].value = p[key];
+    ui[key].nextElementSibling.textContent = FMT[key](p[key]);
+  }
+  document.querySelectorAll('#sel [data-for]').forEach(r => {
+    r.style.display = r.dataset.for === L.type ? '' : 'none';
+  });
+}
+
+function renderList() {
+  const box = $('#lightList'); box.innerHTML = '';
+  const ref = lights[0];
+  lights.forEach(L => {
+    const el = document.createElement('div');
+    el.className = 'li' + (L === selected ? ' sel' : '') + (L.params.on ? '' : ' off');
+    const sw = document.createElement('span'); sw.className = 'sw';
+    sw.style.background = '#' + kelvinToColor(L.params.kelvin).getHexString(THREE.SRGBColorSpace);
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = L.name;
+    const ev = document.createElement('span'); ev.className = 'ev';
+    const diff = L.params.stops - ref.params.stops;
+    ev.textContent = L === ref ? 'KEY' : `${diff > 0 ? '+' : ''}${diff.toFixed(1)}`;
+    el.append(sw, nm, ev);
+    el.onclick = () => select(L);
+    box.appendChild(el);
+  });
+}
+
+function select(L) {
+  selected = L;
+  if (L) transform.attach(L.group); else transform.detach();
+  syncUI();
+}
+
+// 滑桿
+for (const key of Object.keys(FMT)) {
+  ui[key].addEventListener('input', () => {
+    if (!selected) return;
+    const p = selected.params;
+    p[key] = parseFloat(ui[key].value);
+    if (['az', 'el', 'dist'].includes(key)) placeLight(selected);
+    applyParams(selected);
+    ui[key].nextElementSibling.textContent = FMT[key](p[key]);
+    renderList();
+  });
+}
+ui.name.addEventListener('input', () => { if (selected) { selected.name = ui.name.value; renderList(); } });
+ui.type.addEventListener('change', () => {
+  if (!selected) return;
+  selected.type = ui.type.value; buildLight(selected); placeLight(selected); applyParams(selected);
+  transform.attach(selected.group); syncUI();
+});
+$('#p_toggle').onclick = () => { if (selected) { selected.params.on = !selected.params.on; applyParams(selected); syncUI(); } };
+$('#p_del').onclick = () => selected && removeLight(selected);
+$('#p_dup').onclick = () => {
+  if (!selected) return;
+  const s = selected;
+  addLight(s.type, { name: s.name + ' 複製', params: { ...s.params, az: s.params.az + 25 } });
+};
+document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => {
+  if (lights.length >= 6) { alert('為了效能，最多同時 6 盞燈。'); return; }
+  addLight(b.dataset.add);
+});
+
+// 場景
+$('#s_ev').addEventListener('input', e => {
+  renderer.toneMappingExposure = Math.pow(2, +e.target.value);
+  e.target.nextElementSibling.textContent = `${e.target.value > 0 ? '+' : ''}${(+e.target.value).toFixed(1)} EV`;
+});
+$('#s_amb').addEventListener('input', e => {
+  hemi.intensity = +e.target.value;
+  e.target.nextElementSibling.textContent = (+e.target.value).toFixed(2);
+});
+$('#s_bg').addEventListener('input', e => bgMat.color.set(e.target.value));
+$('#s_subj').addEventListener('change', e => Object.assign(subjMat, SUBJECTS[e.target.value]) && subjMat.color.set(SUBJECTS[e.target.value].color));
+$('#s_grid').addEventListener('change', e => { grid.visible = e.target.checked; });
+
+// 相機
+function updateShotCam() {
+  const f = +$('#c_focal').value, h = +$('#c_h').value, d = +$('#c_d').value;
+  shotCam.fov = deg(2 * Math.atan(12 / f));      // 全幅 36×24mm，垂直 24mm
+  shotCam.position.set(0, h, d);
+  const look = new THREE.Vector3(0, 0.95, 0);
+  shotCam.lookAt(look);
+  shotCam.updateProjectionMatrix();
+  camGizmo.position.copy(shotCam.position);
+  camGizmo.quaternion.copy(shotCam.quaternion);
+  $('#c_focal').nextElementSibling.textContent = `${f} mm`;
+  $('#c_h').nextElementSibling.textContent = `${h.toFixed(2)} m`;
+  $('#c_d').nextElementSibling.textContent = `${d.toFixed(1)} m`;
+}
+['c_focal', 'c_h', 'c_d'].forEach(id => $('#' + id).addEventListener('input', updateShotCam));
+
+// 視角
+let mainIsShot = false;
+function setView(mode) {
+  mainIsShot = mode === 'cam';
+  if (mode === 'top') {
+    orbitCam.position.set(0.001, 11, 0.5); orbit.target.set(0, 0, 0); orbit.update();
+  }
+  $('#v_orbit').classList.toggle('on', mode === 'orbit');
+  $('#v_cam').classList.toggle('on', mode === 'cam');
+  $('#v_top').classList.toggle('on', mode === 'top');
+  transform.camera = orbitCam;
+  transform.enabled = !mainIsShot;
+  tHelper.visible = !mainIsShot;
+  layout();
+}
+$('#v_orbit').onclick = () => setView('orbit');
+$('#v_cam').onclick = () => setView('cam');
+$('#v_top').onclick = () => setView('top');
+$('#v_shot').onclick = () => {
+  const a = document.createElement('a');
+  renderer.render(scene, mainIsShot ? shotCam : orbitCam);
+  a.href = renderer.domElement.toDataURL('image/png'); a.download = 'studio-light.png'; a.click();
+};
+
+/* ------------------------------------------------------------------ presets */
+const PRESETS = {
+  three: { name: '三點布光（主光／補光／輪廓光）', lights: [
+    ['softbox', '主光', { az: -45, el: 35, dist: 2.6, stops: 0, w: 1.0, h: 1.0 }],
+    ['softbox', '補光', { az: 50, el: 15, dist: 3.4, stops: -2, w: 1.4, h: 1.0, shadow: 0.3 }],
+    ['spot', '輪廓光', { az: 165, el: 40, dist: 2.8, stops: -0.5, beam: 30, pen: 0.8, kelvin: 6500 }],
+  ] },
+  rembrandt: { name: '林布蘭光（臉頰三角光）', lights: [
+    ['softbox', '主光', { az: -45, el: 45, dist: 2.2, stops: 0, w: 0.8, h: 0.8 }],
+    ['softbox', '反光補光', { az: 70, el: 10, dist: 3.0, stops: -3, w: 1.2, h: 1.2, shadow: 0.2 }],
+  ] },
+  butterfly: { name: '蝴蝶光（正上方，鼻下蝶形陰影）', lights: [
+    ['softbox', '主光', { az: 0, el: 50, dist: 2.0, stops: 0, w: 0.9, h: 0.9 }],
+    ['softbox', '下方反光', { az: 0, el: -8, dist: 2.2, stops: -3, w: 1.2, h: 0.6, shadow: 0.1 }],
+  ] },
+  loop: { name: '環形光（Loop）', lights: [
+    ['softbox', '主光', { az: -30, el: 30, dist: 2.4, stops: 0, w: 1.0, h: 1.0 }],
+    ['softbox', '補光', { az: 55, el: 10, dist: 3.4, stops: -2.3, w: 1.2, h: 1.0, shadow: 0.2 }],
+  ] },
+  split: { name: '分割光（Split，戲劇性）', lights: [
+    ['softbox', '側光', { az: -90, el: 10, dist: 2.2, stops: 0, w: 0.7, h: 1.4 }],
+  ] },
+  rim: { name: '雙側輪廓光（Rim）', lights: [
+    ['softbox', '左輪廓', { az: -140, el: 25, dist: 2.6, stops: 0, w: 0.6, h: 1.8, kelvin: 6000 }],
+    ['softbox', '右輪廓', { az: 140, el: 25, dist: 2.6, stops: 0, w: 0.6, h: 1.8, kelvin: 6000 }],
+    ['softbox', '微弱前補光', { az: 0, el: 10, dist: 3.5, stops: -3.5, w: 1.5, h: 1.0, shadow: 0.1 }],
+  ] },
+  hard: { name: '硬光單燈（聚光燈，強陰影）', lights: [
+    ['spot', '硬光', { az: -40, el: 35, dist: 3.2, stops: 0, beam: 22, pen: 0.1, shadow: 1 }],
+  ] },
+  warmcool: { name: '冷暖對比（雙色溫）', lights: [
+    ['softbox', '暖主光', { az: -50, el: 30, dist: 2.6, stops: 0, kelvin: 3200, w: 1.0, h: 1.0 }],
+    ['softbox', '冷輪廓', { az: 150, el: 30, dist: 2.8, stops: -0.5, kelvin: 8500, w: 0.6, h: 1.4 }],
+  ] },
+};
+const presetSel = $('#preset');
+presetSel.innerHTML = Object.entries(PRESETS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+function loadPreset(key) {
+  clearLights();
+  PRESETS[key].lights.forEach(([type, name, params]) => addLight(type, { name, params }));
+  select(lights[0]);
+}
+presetSel.addEventListener('change', () => loadPreset(presetSel.value));
+
+/* -------------------------------------------------------- picking + layout */
+let down = null;
+renderer.domElement.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || mainIsShot || transform.dragging) return;
+  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+  down = null;
+  if (moved > 4) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  const ray = new THREE.Raycaster(); ray.setFromCamera(ndc, orbitCam);
+  const meshes = [];
+  lights.forEach(L => L.body.traverse(o => { if (o.isMesh) meshes.push(o); }));
+  const hit = ray.intersectObjects(meshes, false)[0];
+  if (hit) { const L = lights.find(l => l.id === hit.object.userData.lightId); if (L) select(L); }
+});
+
+let W = 1, H = 1;
+function layout() {
+  W = view.clientWidth; H = view.clientHeight;
+  renderer.setSize(W, H);
+  orbitCam.aspect = W / H; orbitCam.updateProjectionMatrix();
+  const pw = Math.min(340, W * 0.38);
+  view.style.setProperty('--ph', `${pw * 2 / 3}px`);
+  $('#pipLabel').textContent = mainIsShot ? '棚內視角' : '相機畫面';
+  $('#frameInfo').textContent = mainIsShot ? `${$('#c_focal').value}mm · 3:2` : '';
+}
+addEventListener('resize', layout);
+
+/* --------------------------------------------------------------- render loop */
+function renderPass(cam, hideGizmos) {
+  const vis = [];
+  if (hideGizmos) {
+    lights.forEach(L => { vis.push([L.body, L.body.visible]); L.body.visible = false; });
+    vis.push([grid, grid.visible], [camGizmo, camGizmo.visible], [tHelper, tHelper.visible]);
+    grid.visible = camGizmo.visible = tHelper.visible = false;
+  }
+  renderer.render(scene, cam);
+  vis.forEach(([o, v]) => { o.visible = v; });
+}
+const hideInShot = () => $('#c_hide').checked;
+
+function frame() {
+  requestAnimationFrame(frame);
+  orbit.update();
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, W, H);
+  renderer.setClearColor(0x0c0d10);
+  renderer.clear();
+
+  if (mainIsShot) {
+    // 最大的 3:2 取景框，置中
+    let fw = W, fh = W * 2 / 3;
+    if (fh > H) { fh = H; fw = H * 3 / 2; }
+    const fx = (W - fw) / 2, fy = (H - fh) / 2;
+    renderer.setScissorTest(true);
+    renderer.setViewport(fx, fy, fw, fh); renderer.setScissor(fx, fy, fw, fh);
+    shotCam.aspect = fw / fh; shotCam.updateProjectionMatrix();
+    renderPass(shotCam, hideInShot());
+    // 小視窗：棚內視角
+    const pw = Math.min(340, W * 0.38), ph = pw * 2 / 3, px = W - pw - 16, py = 16;
+    renderer.setViewport(px, py, pw, ph); renderer.setScissor(px, py, pw, ph);
+    renderer.clearDepth();
+    orbitCam.aspect = pw / ph; orbitCam.updateProjectionMatrix();
+    renderPass(orbitCam, false);
+    orbitCam.aspect = W / H; orbitCam.updateProjectionMatrix();
+  } else {
+    renderPass(orbitCam, false);
+    const pw = Math.min(340, W * 0.38), ph = pw * 2 / 3, px = W - pw - 16, py = 16;
+    renderer.setScissorTest(true);
+    renderer.setViewport(px, py, pw, ph); renderer.setScissor(px, py, pw, ph);
+    renderer.clearDepth();
+    shotCam.aspect = 3 / 2; shotCam.updateProjectionMatrix();
+    renderPass(shotCam, hideInShot());
+  }
+}
+
+/* --------------------------------------------------------------------- init */
+$('#s_ev').dispatchEvent(new Event('input'));
+$('#s_amb').dispatchEvent(new Event('input'));
+updateShotCam();
+layout();
+loadPreset('three');
+frame();
+window.__studio = { scene, lights, renderer, orbitCam, shotCam, setView, loadPreset };
+</script>
+</body>
+</html>
